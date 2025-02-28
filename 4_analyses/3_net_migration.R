@@ -18,6 +18,11 @@ library(tidyr)
 library(sf)
 library(tibble)
 
+library(tmap)
+library(scico)
+library(ggplot2)
+library(rmapshaper)
+
 ####  1) Extract urban and rural net-migration ####
 # Load data
 # Rural-urban extent (based on scaled population density and urban pop share for each country)
@@ -45,10 +50,39 @@ terra::writeRaster(netMgrRural, "../results/netMigrRural.tif", overwrite = T)
 
 #### 2) Calulate zonal stats for each admin unit ####
 # Admin units
+cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>% 
+  dplyr::select(-cntry_code) %>% 
+  rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
+  #select(cntry_code,iso2,iso3,Country) %>% 
+  mutate(iso2 = ifelse(Country == 'Namibia','NB',iso2))
 # Regions
-regions <- terra::rast("DATA/regions.tif")
-regions_df <- readr::read_csv("DATA/countriesRegionsZones.csv") %>% 
-  dplyr::select(region_id, regionName) %>% 
+
+# dissolve regions
+#v_adm0_reg <- vect("data_gis/ne_50m_adm0_all_ids/adm0_NatEarth_all_ids.shp") %>%  
+v_adm0_reg <- vect('../results/GADM0_raster.gpkg') %>%  
+  left_join(cntryID) %>% 
+  
+  select(RegionID) %>% 
+  drop_na() %>% 
+  terra::aggregate(by = 'RegionID')
+
+# rasterise polygon file 
+ref_raster_1arcmin <- rast(ncol=360*60, nrow=180*60)
+sfGADM_0_raster_1arcmin <- terra::rasterize(v_adm0_reg,ref_raster_1arcmin,field="RegionID")
+# aggregate to 5 arc-min
+sfGADM_0_raster_5arcmin <- terra::aggregate(sfGADM_0_raster_1arcmin,fact=5,fun=modal,na.rm=T)
+
+sfGADM_0_raster_5arcmin[is.nan(sfGADM_0_raster_5arcmin)] = NA
+
+regions <- sfGADM_0_raster_5arcmin
+
+writeRaster(regions,paste0('../results/regions.tif'),  gdal="COMPRESS=LZW",overwrite=TRUE)
+
+regions_df <- cntryID %>% 
+  left_join(read_csv("../data_in/countries_codes_and_coordinates_regions.csv") %>% select(RegionID, RegName) ) %>% 
+  select(RegionID, RegName) %>% 
+  # rename(region_id = RegionID) %>% 
+  # rename(regionName = RegName) %>% 
   unique()
 
 # Countries
@@ -73,35 +107,7 @@ ruralPop <- terra::subset(ruralPop, 2:21)
 
 # Function to calclulate zonal sums of urban and rural migration
 
-myFun_mgrZonalStats <- function(r_adm, r_popTotal, r_urbanPop, r_ruralPop, r_mgrTotal, r_mgrUrban, r_mgrRural) { #r_popPos, r_popNeg, r_mgrPos, r_mgrNeg
-  #r_admName <- names(r_adm)
-  temp <- unique(values(r_adm)) %>% sort() %>% as_tibble %>% drop_na() %>% rename("admZone" = "value") #%>% select(cntry_raster_masked) %>% rename("country_id" = "cntry_raster_masked")
-  for (i in 1:length(names(r_mgrTotal))){
-    pop_temp <- terra::zonal(r_popTotal[[i]], r_adm, fun = sum, na.rm = T) %>% rename_at(2, ~ gsub("^.*?Pop","totPop_", .x),"_")
-    pop_urban <- terra::zonal(r_urbanPop[[i]], r_adm, fun = sum, na.rm = T) %>% rename_at(2, ~gsub("^.*?Pop","UrbanPop_", .x),"_")
-    pop_rural <- terra::zonal(r_ruralPop[[i]], r_adm, fun = sum, na.rm = T) %>% rename_at(2, ~ gsub("^.*?Pop","RuralPop_", .x),"_")
-    #pos_pop <- terra::zonal(r_popPos[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?Pop", "PosPop_", .x), "_")
-    #neg_pop <- terra::zonal(r_popNeg[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?Pop", "NegPop_", .x), "_")
-    net_migr <- terra::zonal(r_mgrTotal[[i]], r_adm, fun = sum, na.rm = T)  %>% rename_at(2, ~ gsub("^.*?netMgr","TotMgr_", .x),"_")
-    net_urban <- terra::zonal(r_mgrUrban[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?netMgr", "UrbanMgr_", .x), "_")
-    net_rural <- terra::zonal(r_mgrRural[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?netMgr", "RuralMgr_", .x), "_")
-    #pos_migr <- terra::zonal(r_mgrPos[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?netMgr", "PosMgr_", .x), "_")
-    #neg_migr <- terra::zonal(r_mgrNeg[[i]], r_adm, fun = sum, na.rm =T) %>% rename_at(2, ~ gsub("^.*?netMgr", "NegMgr_", .x), "_")
-    
-    temp <- bind_cols(temp, pop_temp[2],pop_urban[2],pop_rural[2],  net_migr[2], net_urban[2], net_rural[2]) #pos_pop[2], neg_pop[2], pos_migr[2], neg_migr[2]
-  }
-  
-  zonalStatsMgr <- temp %>% 
-    pivot_longer(!admZone, names_to = "variable", values_to = "value") %>% 
-    mutate(year = variable) %>% 
-    mutate(split = str_split(year, "_")) %>% 
-    mutate(variable = sapply(split, "[[", 1),
-           year = sapply(split, "[[", 2)) %>% 
-    dplyr::select(-split) %>% 
-    mutate(year = as.numeric(year))
-  
-  return(zonalStatsMgr)
-}
+source('../functions/myFun_mgrZonalStats.R')
 
 zonalStatsRegions <- myFun_mgrZonalStats(regions, pop, urbanPop, ruralPop,  netMgr, netMgrUrban, netMgrRural) #posPop, negPop, , posMgr, negMgr
 zonalStatsCntries <- myFun_mgrZonalStats(countries, pop, urbanPop, ruralPop, netMgr, netMgrUrban, netMgrRural) #posPop, negPop,, posMgr, negMgr
@@ -117,31 +123,28 @@ netMigrGlobal <- terra::global(netMgr, fun = "sum", na.rm =T) %>% as_tibble() %>
   dplyr::select(year, everything())
 
 # Save to .csv
-readr::write_csv(netMigrGlobal, "results/zonalStatsMigrGlobal.csv")
-readr::write_csv(zonalStatsRegions, 'results/zonalStatsRegions.csv')
-readr::write_csv(zonalStatsCntries, 'results/zonalStatsCountries.csv')
-readr::write_csv(zonalStatsCnties, 'results/zonalStatsCnties.csv')
-readr::write_csv(zonalStatsCommunes, 'results/zonalStatsCommunes.csv')
+readr::write_csv(netMigrGlobal, "../results/zonalStatsMigrGlobal.csv")
+readr::write_csv(zonalStatsRegions, '../results/zonalStatsRegions.csv')
+readr::write_csv(zonalStatsCntries, '../results/zonalStatsCountries.csv')
+readr::write_csv(zonalStatsCnties, '../results/zonalStatsCnties.csv')
+readr::write_csv(zonalStatsCommunes, '../results/zonalStatsCommunes.csv')
 
 #### 3) Plot bar plots and maps ####
 
 ## Open packages
-library(tmap)
-library(scico)
-library(ggplot2)
-library(rmapshaper)
+
 
 #### Bar plot (Figure 3) ####
 #load data
-migr_global <- readr::read_csv("results/zonalStatsMigrGlobal.csv")
-migr_regions <- readr::read_csv("results/zonalStatsRegions.csv")
-migr_cntries <- readr::read_csv("results/zonalStatsCountries.csv")
-migr_cnties <- readr::read_csv("results/zonalStatsCnties.csv")
-migr_commun <- readr::read_csv("results/zonalStatsCommunes.csv")
+migr_global <- readr::read_csv("../results/zonalStatsMigrGlobal.csv")
+migr_regions <- readr::read_csv("../results/zonalStatsRegions.csv")
+migr_cntries <- readr::read_csv("../results/zonalStatsCountries.csv")
+migr_cnties <- readr::read_csv("../results/zonalStatsCnties.csv")
+migr_commun <- readr::read_csv("../results/zonalStatsCommunes.csv")
 
 
 # Regions + global
-regions_df <- readr::read_csv('DATA/countryGroupsNames.csv')
+#regions_df <- readr::read_csv('DATA/countryGroupsNames.csv')
 # Combine regional and global data
 migr_globalRegional <- migr_global %>% rename("totPop" = "popGlobal", "UrbanPop" = "popUrban", "RuralPop" = "popRural", 
                                               "TotMgr" = "netMgrGlobal", "UrbanMgr" = "netMgrUrban", "RuralMgr" = "netMgrRural") %>% 
@@ -149,7 +152,7 @@ migr_globalRegional <- migr_global %>% rename("totPop" = "popGlobal", "UrbanPop"
   dplyr::select( admZone, year, UrbanPop, RuralPop, UrbanMgr, RuralMgr, regionName) %>% 
   bind_rows(migr_regions %>% filter(variable %in% c("UrbanPop", "RuralPop", "UrbanMgr", "RuralMgr")) %>% 
               pivot_wider(names_from = variable, values_from = value) %>% 
-              left_join(., regions_df, by = c("admZone" = "regionID"))) %>% 
+              left_join(., regions_df, by = c("admZone" = "RegionID"))) %>% 
   pivot_longer(UrbanPop:RuralMgr, names_to = "variable", values_to = "value")
 
 
@@ -178,62 +181,12 @@ ggsave(Plot_MgrRegionsGlobal,  filename = paste0("../figures/Plot_MgrRegionsGlob
 
 #### Cumulative sum of urban and rural net-migration (Figure S6) ####
 
-myFun_migrStats <- function(r_migr_df){ #r_adm_sf, r_cntry_sf, filter_var_vec, mybreaks, titleVar, colorpal, titleLabel
-  mydata <- r_migr_df %>% 
-    #filter(variable %in% c("cntryPopTot","cntryUrbanPop", "cntryRuralPop", "netMgr","netUrban","netRural")) %>% 
-    pivot_wider(names_from = variable, values_from = value) %>% 
-    group_by(admZone, year) %>% 
-    # Calculate NM per population
-    summarise(totNMpp = TotMgr/totPop, #total net-migraiton per pop
-              urbanNMpp = (UrbanMgr/UrbanPop)*1000, #total urban net-migr per urban pop
-              ruralNMpp = (RuralMgr/RuralPop)*1000) %>%  #total rural net-migr per rural pop
-    # Then calculate cumulative sum over the time period
-    summarise(totSumPp = sum(totNMpp, na.rm=T),
-              urbanSumPp = sum(urbanNMpp, na.rm=T),
-              ruralSumPp = sum(ruralNMpp, na.rm=T)) %>% 
-    pivot_longer(!admZone, names_to = "variable", values_to = "value")
-  
-  return(mydata)
-  
-}
+source('../functions/myFun_migrStats.R')
 
+source('../functions/myFun_create_rasterMap_2.R')
 
 # function transfer dataframes to raster
-myFun_create_rasterMap <- function(r_index, r_mgr_df, variableName, mybreaks,colorpal, titleLabel, #nameLabels
-                                   tocrs = NA){ #
-  
-  classMatrix <- r_mgr_df %>% dplyr::filter(variable == variableName) %>% select(admZone, value) %>% as.matrix()
-  
-  r_mgr_classified <- terra::classify(r_index,
-                                      classMatrix) #variable to plot
-  
-  # project to another crs
-  if (!is.na(tocrs)){
-    r_mgr_classified <- project(r_mgr_classified, tocrs, mask = TRUE)
-  }
-  
-  # create tmap object
-  index_map <- tm_shape(r_mgr_classified) +
-    tm_raster(style = "fixed", # draw gradient instead of classified
-              breaks = mybreaks ,
-              palette = colorpal,
-              #labels = nameLabels,
-              showNA = F,
-              colorNA = 'white',
-              title = titleLabel)+
-    #legend.reverse = TRUE) +
-    tm_shape(sf_gadm0)+
-    tm_borders(col='grey',
-               lwd = 0.1)+
-    tm_layout(main.title.position = "left",
-              legend.bg.color = TRUE,
-              legend.outside = TRUE,
-              frame = FALSE)
-  
-  
-  return (index_map)
-  
-}
+source('../functions/myFun_create_rasterMap_3.R')
 
 
 # Create country boarders from cntry raster
@@ -252,8 +205,9 @@ mgr_cntries <- myFun_migrStats(migr_cntries)
 mgr_cnties <- myFun_migrStats(migr_cnties)
 mgr_communes <- myFun_migrStats(migr_commun )
 
+mybreaks = seq(-0.25, 0.25, 0.05)*1000
 # Countries
-plot_cntries_u <- myFun_create_rasterMap(r_index = r_gadm_lev0_5arcmin, 
+plot_cntries_u <- myFun_create_rasterMap_3(r_index = r_gadm_lev0_5arcmin, 
                                          r_mgr_df = mgr_cntries, 
                                          variableName= 'urbanSumPp',  
                                          mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -261,7 +215,7 @@ plot_cntries_u <- myFun_create_rasterMap(r_index = r_gadm_lev0_5arcmin,
                                          titleLabel = "Cumulative net-migration in urban areas (relative to pop in rural and urban areas in each country)",
                                          tocrs = "+proj=robin +over")
 
-plot_cntries_r <- myFun_create_rasterMap(r_index = r_gadm_lev0_5arcmin, 
+plot_cntries_r <- myFun_create_rasterMap_3(r_index = r_gadm_lev0_5arcmin, 
                                          r_mgr_df = mgr_cntries, 
                                          variableName= 'ruralSumPp',  
                                          mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -269,7 +223,7 @@ plot_cntries_r <- myFun_create_rasterMap(r_index = r_gadm_lev0_5arcmin,
                                          titleLabel = "Cumulative net-migration in rural areas (relative to pop in rural and urban areas in each country)",
                                          tocrs = "+proj=robin +over")
 # Counties
-plot_counties_u <- myFun_create_rasterMap(r_index = r_gadm_lev1_5arcmin, 
+plot_counties_u <- myFun_create_rasterMap_3(r_index = r_gadm_lev1_5arcmin, 
                                           r_mgr_df = mgr_cnties, 
                                           variableName= 'urbanSumPp',  
                                           mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -277,7 +231,7 @@ plot_counties_u <- myFun_create_rasterMap(r_index = r_gadm_lev1_5arcmin,
                                           titleLabel = "Cumulative net-migration in urban areas (relative to pop in rural and urban areas in each province)",
                                           tocrs = "+proj=robin +over")
 
-plot_counties_r <- myFun_create_rasterMap(r_index = r_gadm_lev1_5arcmin, 
+plot_counties_r <- myFun_create_rasterMap_3(r_index = r_gadm_lev1_5arcmin, 
                                           r_mgr_df = mgr_cnties, 
                                           variableName= 'ruralSumPp',  
                                           mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -286,7 +240,7 @@ plot_counties_r <- myFun_create_rasterMap(r_index = r_gadm_lev1_5arcmin,
                                           tocrs = "+proj=robin +over")
 
 # Communes
-plot_communes_u <- myFun_create_rasterMap(r_index = r_gadm_lev2_5arcmin, 
+plot_communes_u <- myFun_create_rasterMap_3(r_index = r_gadm_lev2_5arcmin, 
                                           r_mgr_df = mgr_communes, 
                                           variableName= 'urbanSumPp',  
                                           mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -294,7 +248,7 @@ plot_communes_u <- myFun_create_rasterMap(r_index = r_gadm_lev2_5arcmin,
                                           titleLabel = "Cumulative net-migration in urban areas (relative to pop in rural and urban areas in each commune/municipality)",
                                           tocrs = "+proj=robin +over")
 
-plot_communes_r <- myFun_create_rasterMap(r_index = r_gadm_lev2_5arcmin, 
+plot_communes_r <- myFun_create_rasterMap_3(r_index = r_gadm_lev2_5arcmin, 
                                           r_mgr_df = mgr_communes, 
                                           variableName= 'ruralSumPp',  
                                           mybreaks = seq(-0.25, 0.25, 0.05)*1000,
@@ -322,28 +276,7 @@ timesteps <- c(1,10,19)
 urbanMgr <- subset(urbanMgr, timesteps)
 ruralMgr <- subset(ruralMgr, timesteps)
 
-myFun_create_Map <- function(r_raster, mybreaks,colorpal, titleLabel, #nameLabels
-                             tocrs = NA){ #
-  
-  # project to another crs
-  if (!is.na(tocrs)){
-    r_raster <- project(r_raster, tocrs, mask = TRUE)
-  }
-  
-  # create tmap object
-  index_map <- tm_shape(r_raster) +
-    tm_raster(style = "fixed", # draw gradient instead of classified
-              breaks = mybreaks ,
-              palette = colorpal,
-              #labels = nameLabels,
-              showNA = F,
-              colorNA = 'white',
-              title = titleLabel) +
-    tm_facets(free.scales = FALSE)
-  
-  return (index_map)
-  
-}
+source('../functions/myFun_create_Map.R')
 
 mybreaks = seq(-50,50,10)
 
@@ -359,7 +292,7 @@ ruralMgr_map <- myFun_create_Map(r_raster = ruralMgr,
                                  titleLabel = "Net-migration in rural areas",
                                  tocrs = "+proj=robin +over")
 
-tmap_save(tmap_arrange(urbanMgr_map, ruralMgr_map, ncol = 2), paste0('../fugures/urbanRuralMgr_grid_', Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
+tmap_save(tmap_arrange(urbanMgr_map, ruralMgr_map, ncol = 2), paste0('../figures/urbanRuralMgr_grid_','.pdf'),width = 160, height=160, units='mm')
 
 
 

@@ -7,7 +7,7 @@ library(foreach)
 library(openxlsx) #
 
 library(exactextractr)
-library("ggpubr")
+library(ggpubr)
 library(wCorr)
 library(scico)
 library(tmap)
@@ -24,13 +24,13 @@ r_refRaster_1arcmin <- rast(ncol=5*360*12, nrow=5*180*12)
 ###### read data in -------------------------------
 
 # file created in 'gdp_downscal_validation.R'
-oecdPoly <- st_read('data_in/OECD_TL3_2020_fixed_valid.gpkg')
+oecdPoly <- st_read('../data_in_gpkg/OECD_TL3_2020_fixed_valid.gpkg')
 
 oecdID <- oecdPoly %>% 
   select(tl3_id, iso3)
 
 # load subnat GDP PPP data based on OECD
-oecdData <- read_csv("data_in/Resident population.csv",col_names = T, skip = 1) %>%
+oecdData <- read_csv("../data_in/Resident population.csv",col_names = T, skip = 1) %>%
   as_tibble() %>% 
   rename(tl3_id = Code) %>%  #%>% 
   left_join(oecdID) %>% 
@@ -38,7 +38,7 @@ oecdData <- read_csv("data_in/Resident population.csv",col_names = T, skip = 1) 
 #mutate(rowID = row_number())
 
 # country data
-cntryData <- read_csv("results/national_pop_total.csv") %>%
+cntryData <- read_csv("../results/national_pop_total.csv") %>%
   as_tibble() %>% 
   dplyr::select(-c(Country))
 
@@ -48,7 +48,7 @@ cntryData <- read_csv("results/national_pop_total.csv") %>%
 
 
 # download raster data
-population <- stack('results/r_worldpopHarmonised.tif')
+population <- stack('../results/r_worldpopHarmonised.tif')
 
 
 
@@ -56,59 +56,7 @@ population <- stack('results/r_worldpopHarmonised.tif')
 #rastRaster <- downscaled_mortality
 #year = 2020
 #oecdPolyDown <- oecdPoly
-f_validation <- function(population, year) {
-  
-  popSel <- subset(population,(year-1999))
-  popSel <- popSel*1
-  
-  # Calculate vector of mean December precipitation amount for each municipality
-  tempPop <- exact_extract(popSel, oecdPolyDown, 'sum')
-  
-  # tempRastTot <- terra::extract(rast(rastSelTot), vect(oecdPolyDown), 'sum')
-  # tempPop <- terra::extract(rast(popSel), vect(oecdPolyDown), 'sum')
-  
-  
-  # join with polygon data
-  oecdPolyDown[['pop']] <- ( tempPop )
-  
-  ######## join the obsrved data -------------------
-  
-  nYear <- as.character(year)
-   
-  cntrySelData <- cntryData %>% 
-    dplyr::select(c(iso3,as.character(year))) %>% 
-    rename(valueCntry = as.character(year))
-  
-  oecdPolyData <- oecdData %>% 
-    select(tl3_id, iso3,as.character(year)) %>% 
-    rename(valueObs = as.character(year)) %>% 
-    right_join(oecdPolyDown) %>% 
-    # # from 2015 to 2017 USD
-    # mutate(valueObs = as.numeric(valueObs) * rate_2015 ) %>% 
-    select(-c(name_en )) %>% 
-    #filter(valueObs<300000) %>% # remove huge values
-    drop_na() 
-  
-  oecdPolyData_forRatio <- oecdPolyData  
-  
-  cntryValue_fromObs <- oecdPolyData_forRatio %>% 
-    group_by(iso3) %>% 
-    summarise(sumPop = sum(pop)) %>% # total value and population in that subnat area
-    #mutate(cntryFromSubnatValue = sumTotalValue / sumPop) %>% # calculate ratio in that subnat area
-    left_join(cntrySelData) %>%  # add ratio
-    mutate(ValueRatio = valueCntry / sumPop) # ratio between value based on grid scale and value based on observations
-  
-  valueObsScaled <- oecdPolyData_forRatio %>% 
-    left_join(cntryValue_fromObs[,c('iso3','ValueRatio')]) %>% 
-    mutate(valueObs_scaled = ValueRatio*valueObs) %>% 
-    mutate(!!paste0('valueObs_',nYear) := valueObs_scaled) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('valueDown_',nYear) := pop) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('gdpDiff_',nYear) := (pop-valueObs_scaled) / valueObs_scaled) %>%  # caluclate final value with the ratio
-    select(-c(iso3,valueObs,pop,ValueRatio)) #%>% 
-  
-  
-  return(valueObsScaled)
-}
+source('../functions/f_validation.R')
 
 
 ###### run validation script downscaled data - log10 -----------------------
@@ -157,7 +105,7 @@ validation <- ggarrange(pValid2000, pValid2005, pValid2010,pValid2015,pValid2020
                         labels = c("2000", "2005", "2010", "2015", "2020"),
                         ncol = 2, nrow = 3)
 
-ggsave('figures/validation_worldPop2000_2020.pdf', validation, width = 180, height = 215, units = 'mm')
+ggsave('../figures/validation_worldPop2000_2020.pdf', validation, width = 180, height = 215, units = 'mm')
 
 
 #oecdPolyData_log2 <- f_validation(downscaledGDP_log2)
@@ -166,71 +114,71 @@ ggsave('figures/validation_worldPop2000_2020.pdf', validation, width = 180, heig
 
 # put to maps the diff between modelled and observed
 
-oecdPolyDiff_map_2017 <- oecdPoly %>% 
-  left_join(oecdPolyData_log10_2010)
+oecdPolyDiff_map_2010 <- oecdPoly %>% 
+  left_join(oecdPolyData_pop_2010)
 
-st_write(oecdPolyDiff_map_2010,'results/oecdPolyDiff_map2010.gpkg', append=F)
-
-
-##### correlations ------
-
-correlation_log10 <- c(cor(oecdPolyData_log10$valueObs2005,oecdPolyData_log10$valueDown2005,method='pearson')  ,
-                       cor(oecdPolyData_log10$valueObs2010,oecdPolyData_log10$valueDown2010,method='pearson')  ,
-                       cor(oecdPolyData_log10$valueObs2015,oecdPolyData_log10$valueDown2015,method='pearson')  )
+st_write(oecdPolyDiff_map_2010,'../results/oecdPolyDiff_map2010.gpkg', append=F)
 
 
-wCorrelation_log10 <- c( weightedCorr(oecdPolyData_log10$valueObs2005, oecdPolyData_log10$valueDown2005,
-                                      method = c("Pearson"), weights = oecdPolyData_log10$pop2005),
-                         weightedCorr(oecdPolyData_log10$valueObs2010, oecdPolyData_log10$valueDown2010,
-                                      method = c("Pearson"), weights = oecdPolyData_log10$pop2010),
-                         weightedCorr(oecdPolyData_log10$valueObs2015, oecdPolyData_log10$valueDown2015,
-                                      method = c("Pearson"), weights = oecdPolyData_log10$pop2015))
-
-
-# correlation_log2 <- c(cor(oecdPolyData_log2$valueObs2005,oecdPolyData_log2$valueDown2005,method='pearson')  ,
-#                       cor(oecdPolyData_log2$valueObs2010,oecdPolyData_log2$valueDown2010,method='pearson')  ,
-#                       cor(oecdPolyData_log2$valueObs2015,oecdPolyData_log2$valueDown2015,method='pearson')  )
-
-
-correlation_subnat <- c(cor(oecdPolyData_subnat$valueObs2005,oecdPolyData_subnat$valueDown2005,method='pearson')  ,
-                        cor(oecdPolyData_subnat$valueObs2010,oecdPolyData_subnat$valueDown2010,method='pearson')  ,
-                        cor(oecdPolyData_subnat$valueObs2015,oecdPolyData_subnat$valueDown2015,method='pearson')  )
-
-wCorrelation_log10 <- c( weightedCorr(oecdPolyData_subnat$valueObs2005, oecdPolyData_subnat$valueDown2005,
-                                      method = c("Pearson"), weights = oecdPolyData_subnat$pop2005),
-                         weightedCorr(oecdPolyData_subnat$valueObs2010, oecdPolyData_subnat$valueDown2010,
-                                      method = c("Pearson"), weights = oecdPolyData_subnat$pop2010),
-                         weightedCorr(oecdPolyData_subnat$valueObs2015, oecdPolyData_subnat$valueDown2015,
-                                      method = c("Pearson"), weights = oecdPolyData_subnat$pop2015))
-
-
-
-# http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r
-
-ggscatter(oecdPolyData_log10, x = "valueObs2005", y = "valueDown2005", 
-          add = "reg.line", conf.int = TRUE, 
-          cor.coef = TRUE, cor.method = "pearson",
-          xlab = "Observed GDP", ylab = "Downscaled GDP") + 
-  geom_abline(intercept = 0, slope = 1) + 
-  xlim(0, 125000) + ylim(0, 125000)
-
-ggscatter(oecdPolyData_log10, x = "valueObs2010", y = "valueDown2010", 
-          add = "reg.line", conf.int = TRUE, 
-          cor.coef = TRUE, cor.method = "pearson",
-          xlab = "Observed GDP", ylab = "Downscaled GDP") + 
-  geom_abline(intercept = 0, slope = 1) + 
-  xlim(0, 125000) + ylim(0, 125000)
-
-ggscatter(oecdPolyData_log10, x = "valueObs2015", y = "valueDown2015", 
-          add = "reg.line", conf.int = TRUE, 
-          cor.coef = TRUE, cor.method = "pearson",
-          xlab = "Observed GDP", ylab = "Downscaled GDP") + 
-  geom_abline(intercept = 0, slope = 1) + 
-  xlim(0, 125000) + ylim(0, 125000)
-
+# ##### correlations ------
+# 
+# correlation_log10 <- c(cor(oecdPolyData_log10$valueObs2005,oecdPolyData_log10$valueDown2005,method='pearson')  ,
+#                        cor(oecdPolyData_log10$valueObs2010,oecdPolyData_log10$valueDown2010,method='pearson')  ,
+#                        cor(oecdPolyData_log10$valueObs2015,oecdPolyData_log10$valueDown2015,method='pearson')  )
+# 
+# 
+# wCorrelation_log10 <- c( weightedCorr(oecdPolyData_log10$valueObs2005, oecdPolyData_log10$valueDown2005,
+#                                       method = c("Pearson"), weights = oecdPolyData_log10$pop2005),
+#                          weightedCorr(oecdPolyData_log10$valueObs2010, oecdPolyData_log10$valueDown2010,
+#                                       method = c("Pearson"), weights = oecdPolyData_log10$pop2010),
+#                          weightedCorr(oecdPolyData_log10$valueObs2015, oecdPolyData_log10$valueDown2015,
+#                                       method = c("Pearson"), weights = oecdPolyData_log10$pop2015))
+# 
+# 
+# # correlation_log2 <- c(cor(oecdPolyData_log2$valueObs2005,oecdPolyData_log2$valueDown2005,method='pearson')  ,
+# #                       cor(oecdPolyData_log2$valueObs2010,oecdPolyData_log2$valueDown2010,method='pearson')  ,
+# #                       cor(oecdPolyData_log2$valueObs2015,oecdPolyData_log2$valueDown2015,method='pearson')  )
+# 
+# 
+# correlation_subnat <- c(cor(oecdPolyData_subnat$valueObs2005,oecdPolyData_subnat$valueDown2005,method='pearson')  ,
+#                         cor(oecdPolyData_subnat$valueObs2010,oecdPolyData_subnat$valueDown2010,method='pearson')  ,
+#                         cor(oecdPolyData_subnat$valueObs2015,oecdPolyData_subnat$valueDown2015,method='pearson')  )
+# 
+# wCorrelation_log10 <- c( weightedCorr(oecdPolyData_subnat$valueObs2005, oecdPolyData_subnat$valueDown2005,
+#                                       method = c("Pearson"), weights = oecdPolyData_subnat$pop2005),
+#                          weightedCorr(oecdPolyData_subnat$valueObs2010, oecdPolyData_subnat$valueDown2010,
+#                                       method = c("Pearson"), weights = oecdPolyData_subnat$pop2010),
+#                          weightedCorr(oecdPolyData_subnat$valueObs2015, oecdPolyData_subnat$valueDown2015,
+#                                       method = c("Pearson"), weights = oecdPolyData_subnat$pop2015))
+# 
+# 
+# 
+# # http://www.sthda.com/english/wiki/correlation-test-between-two-variables-in-r
+# 
+# ggscatter(oecdPolyData_log10, x = "valueObs2005", y = "valueDown2005", 
+#           add = "reg.line", conf.int = TRUE, 
+#           cor.coef = TRUE, cor.method = "pearson",
+#           xlab = "Observed GDP", ylab = "Downscaled GDP") + 
+#   geom_abline(intercept = 0, slope = 1) + 
+#   xlim(0, 125000) + ylim(0, 125000)
+# 
+# ggscatter(oecdPolyData_log10, x = "valueObs2010", y = "valueDown2010", 
+#           add = "reg.line", conf.int = TRUE, 
+#           cor.coef = TRUE, cor.method = "pearson",
+#           xlab = "Observed GDP", ylab = "Downscaled GDP") + 
+#   geom_abline(intercept = 0, slope = 1) + 
+#   xlim(0, 125000) + ylim(0, 125000)
+# 
+# ggscatter(oecdPolyData_log10, x = "valueObs2015", y = "valueDown2015", 
+#           add = "reg.line", conf.int = TRUE, 
+#           cor.coef = TRUE, cor.method = "pearson",
+#           xlab = "Observed GDP", ylab = "Downscaled GDP") + 
+#   geom_abline(intercept = 0, slope = 1) + 
+#   xlim(0, 125000) + ylim(0, 125000)
+# 
 
 ####### plot maps ----------------
-create_map <- function(in_polygon, inBbox,cMeridian,var_name, maptitle, colorpal, breakvals,
+f_create_map <- function(in_polygon, inBbox,cMeridian,var_name, maptitle, colorpal, breakvals,
                        color_midpoint = NULL, eqearth = TRUE){
   
   
@@ -265,7 +213,7 @@ create_map <- function(in_polygon, inBbox,cMeridian,var_name, maptitle, colorpal
 
 # plot difference between modelled and observed GDP
 
-oecdPolyDiff_map <- st_read('results/oecdPolyDiff_map2010.gpkg') %>% 
+oecdPolyDiff_map <- st_read('../results/oecdPolyDiff_map2010.gpkg') %>% 
   st_set_crs(4326)
 
 #crs(oecdPolyDiff_map)
@@ -283,7 +231,7 @@ bbox_JPN <- st_bbox(c(xmin = 122.5, xmax = 150, ymax = 30, ymin = 50), crs = st_
 
 
 # apply plotting function
-plt_gdpDiff2005_USA <- create_map(in_polygon = oecdPolyDiff_map,
+plt_gdpDiff2005_USA <- f_create_map(in_polygon = oecdPolyDiff_map,
                                   inBbox = bbox_USA,
                                   cMeridian = -95,
                                   var_name = "gdpDiff_2010",
@@ -292,7 +240,7 @@ plt_gdpDiff2005_USA <- create_map(in_polygon = oecdPolyDiff_map,
                                   breakvals = diffBreaks,
                                   color_midpoint = 0) # give color midpoint
 
-plt_gdpDiff2005_EUR <- create_map(in_polygon = oecdPolyDiff_map,
+plt_gdpDiff2005_EUR <- f_create_map(in_polygon = oecdPolyDiff_map,
                                   inBbox = bbox_EUR,
                                   cMeridian = 0,
                                   var_name = "gdpDiff_2010",
@@ -301,7 +249,7 @@ plt_gdpDiff2005_EUR <- create_map(in_polygon = oecdPolyDiff_map,
                                   breakvals = diffBreaks,
                                   color_midpoint = 0) # give color midpoint
 
-plt_gdpDiff2005_JPN <- create_map(in_polygon = oecdPolyDiff_map,
+plt_gdpDiff2005_JPN <- f_create_map(in_polygon = oecdPolyDiff_map,
                                   inBbox = bbox_JPN,
                                   cMeridian = 135,
                                   var_name = "gdpDiff_2010",
@@ -311,9 +259,5 @@ plt_gdpDiff2005_JPN <- create_map(in_polygon = oecdPolyDiff_map,
                                   color_midpoint = 0) # give color midpoint
 
 
-plt_health <- tmap_arrange(plt_status_BMI, plt_trend_BMI, 
-                           plt_status_CHOL,plt_trend_CHOL, 
-                           ncol = 2)
-tmap_save(tm = plt_health, filename = "figures/health_status_trend.pdf",width = 180,height = 140, units = "mm")
 
 

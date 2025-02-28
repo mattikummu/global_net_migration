@@ -3,7 +3,7 @@
 rm(list = ls())
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-.libPaths('/Users/nivav1/Documents/R')
+
 
 ## Open packages
 library(terra)

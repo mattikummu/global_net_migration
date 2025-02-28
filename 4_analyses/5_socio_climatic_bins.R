@@ -16,7 +16,7 @@ library(stringr)
 
 
 # Load data 
-population <- rast('DATA/r_worldpopHarmonised.tif')
+population <- rast('../results/r_worldpopHarmonised.tif')
 
 # Create a pop mask
 pop_mask <- population
@@ -147,7 +147,7 @@ pop_soc_arid_bins <- create_bins(hdi_tot, aridity_avg, pop_count, pop_mask, N)
 
 plot(pop_soc_arid_bins)
 
-writeRaster(pop_soc_arid_bins, filename=paste0('DATA/pop_soc_arid_bins_',str_remove(names(pop_count),'ppp_'),'_', Sys.Date(),'.tif'), overwrite = T)
+writeRaster(pop_soc_arid_bins, filename=paste0('DATA/pop_soc_arid_bins_',str_remove(names(pop_count),'ppp'),'.tif'), overwrite = T)
 
 
 

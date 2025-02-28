@@ -23,7 +23,7 @@ r_refRaster_5arcmin <- rast(ncol=360*12, nrow=180*12)
 r_refRaster_1arcmin <- rast(ncol=5*360*12, nrow=5*180*12)
 ###### read data in -------------------------------
 
-nuts3Poly <- st_read('data_in/NUTS_RG_20M_2016_4326.shp/NUTS_RG_20M_2016_4326.shp') %>% 
+nuts3Poly <- st_read('../data_in_gpkg/NUTS_RG_20M_2016_4326.shp/NUTS_RG_20M_2016_4326.shp') %>% 
   mutate(LEVL_CODE = as.numeric(LEVL_CODE)) %>% 
   filter(LEVL_CODE == 3) %>% 
   rename(tl3_id = NUTS_ID)
@@ -36,7 +36,7 @@ areaNuts <- expanse(vect(nuts3Poly), unit = 'km') %>%
 
 summary(st_is_valid(nuts3Poly))
 
-countyPoly <- st_read('data_in/tl_2022_us_county/tl_2022_us_county.shp') %>% 
+countyPoly <- st_read('../data_in_gpkg/tl_2022_us_county/tl_2022_us_county.shp') %>% 
   select(GEOID) %>% 
   st_transform(4326) %>% 
   rename(tl3_id = GEOID)
@@ -46,14 +46,14 @@ summary(st_is_valid(countyPoly))
 nutsID <- nuts3Poly %>% 
   select(tl3_id, CNTR_CODE)
 
-countryID <- read_csv("data_in/cntry_fao_id.csv") %>% 
+countryID <- read_csv("../data_in/cntry_fao_id.csv") %>% 
   select(c(iso_a2, iso_a3)) %>% 
   rename(CNTR_CODE = iso_a2) %>% 
   rename(iso3 = iso_a3)
 
 
 # load population and area
-nuts3area <- readxl::read_xls ("data_in/demo_r_d3area.xls",skip = 9) %>%
+nuts3area <- readxl::read_xls ("../data_in/demo_r_d3area.xls",skip = 9) %>%
   as_tibble() %>% 
   rename(tl3_id = `GEO/TIME`) %>%  #%>% 
   left_join(nutsID) %>% 
@@ -61,7 +61,7 @@ nuts3area <- readxl::read_xls ("data_in/demo_r_d3area.xls",skip = 9) %>%
   select(c(tl3_id, '2015', CNTR_CODE)) %>% 
   rename(area_km2 = '2015')
 
-nuts3popCount <- readxl::read_xls ("data_in/demo_r_d3dens.xls",skip = 8) %>%
+nuts3popCount <- readxl::read_xls ("../data_in/demo_r_d3dens.xls",skip = 8) %>%
   as_tibble() %>%
   rename(tl3_id = `GEO/TIME`) %>%  #%>%
   left_join(nutsID) %>%
@@ -75,7 +75,7 @@ nuts3popCount <- readxl::read_xls ("data_in/demo_r_d3dens.xls",skip = 8) %>%
   mutate(pop2017 = as.numeric(dens2017) * area_km2) %>%
   select(c(tl3_id, pop2015, pop2017,CNTR_CODE))
 
-# nuts3popCountRaster <- exact_extract(rast('results/r_worldpopHarmonised.tif'), nuts3Poly, 'sum')  %>%
+# nuts3popCountRaster <- exact_extract(rast('../results/r_worldpopHarmonised.tif'), nuts3Poly, 'sum')  %>%
 #   dplyr::bind_cols(nuts3Poly) %>%
 #   as_tibble() %>%
 #   filter(!is.na(CNTR_CODE)) %>%
@@ -91,7 +91,7 @@ nuts3popCount <- readxl::read_xls ("data_in/demo_r_d3dens.xls",skip = 8) %>%
 
 
 # load subnat subnat data
-nuts3Data <- readxl::read_xls ("data_in/eurostat_births_nuts0-3.xls",skip = 7) %>%
+nuts3Data <- readxl::read_xls ("../data_in/eurostat_births_nuts0-3.xls",skip = 7) %>%
   as_tibble() %>% 
   rename(tl3_id = GEO) %>%  #%>% 
   left_join(nutsID) %>% 
@@ -111,7 +111,7 @@ nuts3Data <- readxl::read_xls ("data_in/eurostat_births_nuts0-3.xls",skip = 7) %
 
 
 # 
-# countyData <- readxl::read_xlsx ("data_in/US_births_2007-2019.xlsx") %>%
+# countyData <- readxl::read_xlsx ("../data_in/US_births_2007-2019.xlsx") %>%
 #   as_tibble() %>% 
 #   select(c(`County Code`,Year,`Birth Rate`)) %>% 
 #   rename(GEOID = `County Code`) %>% 
@@ -124,7 +124,7 @@ nuts3Data <- readxl::read_xls ("data_in/eurostat_births_nuts0-3.xls",skip = 7) %
 
 
 # country data
-cntryData <- read_csv("results/national_births_ratio_interp.csv") %>%
+cntryData <- read_csv("../results/national_births_ratio_interp.csv") %>%
   as_tibble() %>% 
   dplyr::select(-c(Country))
 
@@ -138,10 +138,10 @@ cntryData <- read_csv("results/national_births_ratio_interp.csv") %>%
 
 # download raster data
 
-#downscaled_mortality <- stack('results/Dths_downscaled_2000_2019_UPDATED.tif')
-downscaled_births <- rast('results/ratioRaster_birthHarm.tif')
+#downscaled_mortality <- stack('../results/Dths_downscaled_2000_2019_UPDATED.tif')
+downscaled_births <- rast('../results/ratioRaster_birthHarm.tif')
 
-population <- rast('results/r_worldpopHarmonised.tif')
+population <- rast('../results/r_worldpopHarmonised.tif')
 
 
 
@@ -150,129 +150,13 @@ population <- rast('results/r_worldpopHarmonised.tif')
 #year = 2017
 #oecdPolyDown <- nuts3Poly
 #oecdData <- nuts3Data
-f_validationEUR <- function(rastRaster, oecdData, oecdPolyDown, year) {
-  
-  rastSel <- subset(rastRaster,(year-1999))
-  popSel <- subset(population,(year-1999))
-  rastSelTot <- rastSel*popSel
-  popSel <- popSel*1
-  
-  # Calculate vector of mean December precipitation amount for each municipality
-  tempRastTot <- exact_extract(rastSelTot, oecdPolyDown, 'sum')
-  tempPop <- exact_extract(popSel, oecdPolyDown, 'sum')
-  
-  # tempRastTot <- terra::extract(rast(rastSelTot), vect(oecdPolyDown), 'sum')
-  # tempPop <- terra::extract(rast(popSel), vect(oecdPolyDown), 'sum')
-  
-  
-  # join with polygon data
-  oecdPolyDown[['valueDown']] <- ( tempRastTot/tempPop )
-  oecdPolyDown[['pop']] <- ( tempPop )
-  
-  ######## join the obsrved data -------------------
-  
-  nYear <- as.character(year)
-  
-  cntrySelData <- cntryData %>% 
-    dplyr::select(c(iso3,as.character(year))) %>% 
-    rename(gdpCntry = as.character(year))
-  
-  oecdPolyData <- oecdData %>% 
-    select(tl3_id, iso3,as.character(year)) %>% 
-    rename(valueObs = as.character(year)) %>% 
-    right_join(oecdPolyDown) #%>% 
-  # # from 2015 to 2017 USD
-  # mutate(valueObs = as.numeric(valueObs) * rate_2015 ) %>% 
-  #select(-c(name_en )) %>% 
-  #filter(valueObs<300000) %>% # remove huge values
-  #drop_na() 
-  
-  oecdPolyData_forRatio <- oecdPolyData  %>% 
-    mutate(totObsValue = valueObs * pop) 
-  
-  cntryValue_fromObs <- oecdPolyData_forRatio %>% 
-    group_by(iso3) %>% 
-    summarise(sumTotalValue = sum(totObsValue), sumPop = sum(pop)) %>% # total value and population in that subnat area
-    mutate(cntryFromSubnatGDP_percapita = sumTotalValue / sumPop) %>% # calculate ratio in that subnat area
-    left_join(cntrySelData) %>%  # add ratio
-    mutate(GDPratio = gdpCntry / cntryFromSubnatGDP_percapita) %>% # ratio between value based on grid scale and value based on observations
-    ungroup()
-  
-  valueObsScaled <- oecdPolyData_forRatio %>% 
-    left_join(cntryValue_fromObs[,c('iso3','GDPratio')]) %>% 
-    mutate(valueObs_scaled = GDPratio*valueObs) %>% 
-    mutate(!!paste0('valueObs_',nYear) := valueObs_scaled) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('valueDown_',nYear) := valueDown) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('valueDiff_',nYear) := (valueDown-valueObs_scaled) / valueObs_scaled) %>%  # caluclate final value with the ratio
-    select(-c(iso3,valueObs,pop,totObsValue,GDPratio,valueDown)) 
-  
-  
-  return(valueObsScaled)
-}
+source('../functions/f_validationEUR.R')
 
 #rastRaster <- downscaled_births
 #year = 2019
 #oecdPolyDown <- countyPoly
 #oecdData <- countyData
-f_validationUS <- function(rastRaster, oecdData, oecdPolyDown, year) {
-  
-  rastSel <- subset(rastRaster,(year-1999))
-  popSel <- subset(population,(year-1999))
-  rastSelTot <- rastSel*popSel
-  popSel <- popSel*1
-  
-  # Calculate vector of mean December precipitation amount for each municipality
-  tempRastTot <- exact_extract(rastSelTot, oecdPolyDown, 'sum')
-  tempPop <- exact_extract(popSel, oecdPolyDown, 'sum')
-  
-  # tempRastTot <- terra::extract(rast(rastSelTot), vect(oecdPolyDown), 'sum')
-  # tempPop <- terra::extract(rast(popSel), vect(oecdPolyDown), 'sum')
-  
-  
-  # join with polygon data
-  oecdPolyDown[['valueDown']] <- ( tempRastTot/tempPop )
-  oecdPolyDown[['pop']] <- ( tempPop )
-  
-  ######## join the obsrved data -------------------
-  
-  nYear <- as.character(year)
-  
-  cntrySelData <- cntryData %>% 
-    dplyr::select(c(iso3,as.character(year))) %>% 
-    rename(gdpCntry = as.character(year))
-  
-  oecdPolyData <- oecdData %>% 
-    select(tl3_id, iso3,as.character(year)) %>% 
-    mutate(tl3_id = as.character(tl3_id)) %>% 
-    rename(valueObs = as.character(year)) %>% 
-    right_join(oecdPolyDown) %>% 
-    # # from 2015 to 2017 USD
-    # mutate(valueObs = as.numeric(valueObs) * rate_2015 ) %>% 
-    #select(-c(name_en )) %>% 
-    #filter(valueObs<300000) %>% # remove huge values
-    drop_na() 
-  
-  oecdPolyData_forRatio <- oecdPolyData  %>% 
-    mutate(totObsValue = valueObs * pop) 
-  
-  cntryValue_fromObs <- oecdPolyData_forRatio %>% 
-    group_by(iso3) %>% 
-    summarise(sumTotalValue = sum(totObsValue), sumPop = sum(pop)) %>% # total value and population in that subnat area
-    mutate(cntryFromSubnatGDP_percapita = sumTotalValue / sumPop) %>% # calculate ratio in that subnat area
-    left_join(cntrySelData) %>%  # add ratio
-    mutate(GDPratio = gdpCntry / cntryFromSubnatGDP_percapita) # ratio between value based on grid scale and value based on observations
-  
-  valueObsScaled <- oecdPolyData_forRatio %>% 
-    left_join(cntryValue_fromObs[,c('iso3','GDPratio')]) %>% 
-    mutate(valueObs_scaled = GDPratio*valueObs) %>% 
-    mutate(!!paste0('valueObs_',nYear) := valueObs_scaled) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('valueDown_',nYear) := valueDown) %>%  # caluclate final value with the ratio
-    mutate(!!paste0('valueDiff_',nYear) := (valueDown-valueObs_scaled) / valueObs_scaled) %>%  # caluclate final value with the ratio
-    select(-c(iso3,valueObs,pop,totObsValue,GDPratio,valueDown)) #%>% 
-  
-  
-  return(valueObsScaled)
-}
+source('../functions/f_validationUS.R')
 
 
 ###### run validation script downscaled data - log10 -----------------------
@@ -292,7 +176,7 @@ validation <- ggscatter(oecdPolyDataEUR, x = "valueObs_2017", y = "valueDown_201
   xlim(0, 35) + ylim(0, 35)
 
 
-ggsave('figures/validation_births_EUR_n1504_2023-02-06.pdf', validation, width = 90, height = 90, units = 'mm')
+ggsave('../figures/validation_births_EUR_n1504.pdf', validation, width = 90, height = 90, units = 'mm')
 
 # 
 # oecdPolyDataUS <- f_validationUS(downscaled_births,countyData,countyPoly, 2017) %>% 
@@ -313,7 +197,7 @@ ggsave('figures/validation_births_EUR_n1504_2023-02-06.pdf', validation, width =
 #   xlim(0, 35) + ylim(0, 35)
 # 
 # 
-# ggsave('figures/validation_births.pdf', validation, width = 90, height = 90, units = 'mm')
+# ggsave('../figures/validation_births.pdf', validation, width = 90, height = 90, units = 'mm')
 
 
 #oecdPolyData_log2 <- f_validation(downscaledGDP_log2)
@@ -321,51 +205,21 @@ ggsave('figures/validation_births_EUR_n1504_2023-02-06.pdf', validation, width =
 
 
 # put to maps the diff between modelled and observed
-
-nuts3PolyDiff_map_2017 <- nuts3Poly %>% 
-  left_join(oecdPolyDataEUR)
-
-st_write(nuts3PolyDiff_map_2017,'results/nuts3PolyDiff_map_2017.gpkg', append=F)
-
+# 
+# nuts3PolyDiff_map_2017 <- nuts3Poly %>% 
+#   left_join(oecdPolyDataEUR)
+# 
+# writeVector(vect(nuts3PolyDiff_map_2017),'../results/nuts3PolyDiff_map_2017.gpkg', overwrite=TRUE)
+# 
 
 
 ####### plot maps ----------------
-create_map <- function(in_polygon, inBbox,cMeridian,var_name, maptitle, colorpal, breakvals,
-                       color_midpoint = NULL, eqearth = TRUE){
-  
-  
-  # project to Robinson if desired (true by default)
-  if (eqearth){
-    in_polygon <- st_transform(in_polygon, 
-                               crs = paste0('+proj=eqearth +lon_0=',cMeridian,' +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs'))
-  }
-  # create tmap object
-  plt_tmap <- tm_shape(in_polygon, bbox = inBbox) +
-    tm_polygons(col = var_name,
-                style = "fixed",
-                breaks = breakvals,
-                palette = colorpal,
-                lwd = 0.01,
-                textNA = "no data",
-                colorNA = "grey80",
-                legend.is.portrait = FALSE) +
-    tm_layout(main.title = maptitle,
-              frame = FALSE,
-              legend.bg.color = TRUE,
-              legend.outside = TRUE,
-              legend.outside.position = "bottom",
-              main.title.size = 0.8,
-              legend.title.size = 0.6)
-  
-  
-  return(plt_tmap)
-  
-}
+source('../functions/f_create_map_valid.R')
 
 
 # plot difference between modelled and observed GDP
 
-# oecdPolyDiff_map <- st_read('results/oecdPolyDiff_map2010.gpkg') %>% 
+# oecdPolyDiff_map <- st_read('../results/oecdPolyDiff_map2010.gpkg') %>% 
 #   st_set_crs(4326)
 
 oecdPolyDiff_map <- nuts3PolyDiff_map_2017  
@@ -394,7 +248,7 @@ bbox_EUR <- st_bbox(c(xmin = -10, xmax = 40, ymax = 35, ymin = 70), crs = st_crs
 #                                   breakvals = diffBreaks,
 #                                   color_midpoint = 0) # give color midpoint
 
-plt_birthDiff2017_EUR <- create_map(in_polygon = oecdPolyDiff_map,
+plt_birthDiff2017_EUR <- f_create_map_valid(in_polygon = oecdPolyDiff_map,
                                   inBbox = bbox_EUR,
                                   cMeridian = 0,
                                   var_name = "valueDiff_2017",
@@ -416,6 +270,6 @@ plt_birthDiff2017_EUR <- create_map(in_polygon = oecdPolyDiff_map,
 # plt_health <- tmap_arrange(plt_status_BMI, plt_trend_BMI, 
 #                            plt_status_CHOL,plt_trend_CHOL, 
 #                            ncol = 2)
-tmap_save(tm = plt_birthDiff2017_EUR, filename = "figures/plt_birthDiff2017_EUR.pdf",width = 180,height = 140, units = "mm")
+tmap_save(tm = plt_birthDiff2017_EUR, filename = "../figures/plt_birthDiff2017_EUR.pdf",width = 180,height = 140, units = "mm")
 
 

@@ -6,7 +6,7 @@
 rm(list = ls())
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-.libPaths("/Users/nivav1/Documents/R/")
+
 
 ## Open packages
 library(terra)
@@ -19,17 +19,17 @@ library(tmap)
 
 # Load data
 # Socio-climatic bins
-soc_arid_bins <- rast('DATA/pop_soc_arid_bins_mean_2022-03-04.tif') # change date
+soc_arid_bins <- rast('../results/pop_soc_arid_bins_mean.tif') # change date
 
 # pop 2000-2020
-pop <- terra::rast("DATA/r_worldpopHarmonised.tif")
-urbanPop <- terra::rast('DATA/popUrban.tif')
-ruralPop <- terra::rast('DATA/popRural.tif')
+pop <- terra::rast("../results/r_worldpopHarmonised.tif")
+urbanPop <- terra::rast('../results/popUrban.tif')
+ruralPop <- terra::rast('../results/popRural.tif')
 
 # net-migration (yearly) 2001-2020
-netMgr <- terra::rast("DATA/netMgr_2001_2020_v3.tif")
-netMgrUrban <- terra::rast("DATA/netMigrUrban.tif")
-netMgrRural <- terra::rast("DATA/netMigrRural.tif")
+netMgr <- terra::rast("../results/netMgr_2001_2020_v3.tif")
+netMgrUrban <- terra::rast("../results/netMigrUrban.tif")
+netMgrRural <- terra::rast("../results/netMigrRural.tif")
 
 
 #### 1) Calculate zonal sums of urban and rural migration in socio-climatic bins ####

@@ -9,7 +9,6 @@ rm(list = ls())
 
 
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
-.libPaths("/Documents/R/")
 
 ## Open packages
 library(dplyr)
@@ -24,22 +23,22 @@ library(terra)
 library(rmapshaper)
 
 # Load data (produced in net_migration.R file)
-migr_global <- readr::read_csv("results/zonalStatsMigrGlobal.csv")
-migr_regions <- readr::read_csv("results/zonalStatsRegions.csv")
+migr_global <- readr::read_csv("../results/zonalStatsMigrGlobal.csv")
+migr_regions <- readr::read_csv("../results/zonalStatsRegions.csv")
 
-migr_cntries <- readr::read_csv("results/zonalStatsCountries.csv") #%>% rename("admZone" = "cntry_code")
-migr_cnties <- readr::read_csv("results/zonalStatsCnties.csv") #%>% rename("admZone" = "nmbr")
-migr_commun <- readr::read_csv("results/zonalStatsCommunes.csv") #%>% rename("admZone" = "nmbr2")
+migr_cntries <- readr::read_csv("../results/zonalStatsCountries.csv") #%>% rename("admZone" = "cntry_code")
+migr_cnties <- readr::read_csv("../results/zonalStatsCnties.csv") #%>% rename("admZone" = "nmbr")
+migr_commun <- readr::read_csv("../results/zonalStatsCommunes.csv") #%>% rename("admZone" = "nmbr2")
 
-countries_sf <- sf::read_sf("DATA/gadm_lev0_sf.gpkg") %>% rename("admZone" = "cntry_code")
-counties_sf <- sf::read_sf("DATA/gadm_lev1_sf.gpkg") %>% rename("admZone" = "nmbr")
-communes_sf <- sf::read_sf("DATA/gadm_lev2_sf.gpkg") %>% rename("admZone" = "nmbr2")
+countries_sf <- sf::read_sf("../data_in_gpkg/gadm_level0.gpkg") #%>% rename("admZone" = "cntry_code")
+counties_sf <- sf::read_sf("../data_in_gpkg/gadm_lev1.gpkg") #%>% rename("admZone" = "nmbr")
+communes_sf <- sf::read_sf("../data_in_gpkg/gadm_lev2.gpkg") #%>% rename("admZone" = "nmbr2")
 
-r_gadm_lev0_5arcmin <- rast('DATA/gadm_lev0_5arcmin.tif')
+r_gadm_lev0_5arcmin <- rast('../data_in_rast/gadm_lev0_5arcmin.tif')
 # remove Antarctica
 r_gadm_lev0_5arcmin[r_gadm_lev0_5arcmin == 10] <- NA
-r_gadm_lev1_5arcmin <- rast('DATA/gadm_lev1_5arcmin.tif')
-r_gadm_lev2_5arcmin <- rast('DATA/gadm_lev2_5arcmin.tif')
+r_gadm_lev1_5arcmin <- rast('../data_in_rast/gadm_lev1_5arcmin.tif')
+r_gadm_lev2_5arcmin <- rast('../data_in_rast/gadm_lev2_5arcmin.tif')
 
 
 #### 1) Classify adm-areas based on urban and rural migration combinations ####
@@ -65,7 +64,7 @@ myFun_migrClass <- function(r_migr_adm, myYears,r_adm, nameOutput) {
                           cbind(migr_class[,1], migr_class$mgr_class))
   
   
-  writeRaster(r_adm_class,paste0('results/r_rural_urban_classification_',nameOutput,'_',Sys.Date(),'.tif'),  gdal="COMPRESS=LZW",overwrite=TRUE)
+  writeRaster(r_adm_class,paste0('../results/r_rural_urban_classification_',nameOutput,'.tif'),  gdal="COMPRESS=LZW",overwrite=TRUE)
   return(migr_class)
   
 }
@@ -86,9 +85,9 @@ migr_class_communes_decades <- myFun_migrClass(migr_commun,
                                                r_gadm_lev2_5arcmin,
                                                'communes')  
 
-readr::write_csv(migr_class_countries_decades, paste0('results/migr_direction_countries_', Sys.Date(), '.csv'))
-readr::write_csv(migr_class_counties_decades, paste0('results/migr_direction_counties_', Sys.Date(), '.csv'))
-readr::write_csv(migr_class_communes_decades, paste0('results/migr_direction_communes_', Sys.Date(), '.csv'))
+readr::write_csv(migr_class_countries_decades, paste0('../results/migr_direction_countries','.csv'))
+readr::write_csv(migr_class_counties_decades, paste0('../results/migr_direction_counties','.csv'))
+readr::write_csv(migr_class_communes_decades, paste0('../results/migr_direction_communes', '.csv'))
 
 
 #### 2) Plot classification ####
@@ -124,7 +123,7 @@ myFun_migrClassPlot <- function(r_index, nameLabels, titleLabel, colorpal,
   
 }
 
-sf_gadm0 <- terra::as.polygons(rast('DATA/gadm_lev0_5arcmin.tif')) %>% 
+sf_gadm0 <- terra::as.polygons(rast('../data_in_rast/gadm_lev0_5arcmin.tif')) %>% 
   sf::st_as_sf() %>% # to sf
   rmapshaper::ms_simplify(.,keep=0.1,keep_shapes = T) # simplify
 
@@ -142,17 +141,17 @@ mgrLabels <- c('zero net-migration',
 col = c("#160D19", "#7B9DE1", "#E4586F", "#C7B61A",  "#9151A0", "#FFFFFF") #simplified
 
 
-plot_migr_class_countries_decades <- myFun_migrClassPlot(rast('results/r_rural_urban_classification_countries_2023-01-30.tif'), 
+plot_migr_class_countries_decades <- myFun_migrClassPlot(rast('../results/r_rural_urban_classification_countries.tif'), 
                                                          mgrLabels, 
                                                          'direction of rural and urban net-migration - national',
                                                          colorpal = col, #scico(9,palette = 'roma'), 
                                                          tocrs = "+proj=robin +over")
-plot_migr_class_counties_decades <- myFun_migrClassPlot(rast('results/r_rural_urban_classification_counties_2023-01-30.tif'), 
+plot_migr_class_counties_decades <- myFun_migrClassPlot(rast('../results/r_rural_urban_classification_counties.tif'), 
                                                         mgrLabels, 
                                                         'direction of rural and urban net-migration - provincial',
                                                         colorpal = col, #scico(9,palette = 'roma'), 
                                                         tocrs = "+proj=robin +over")
-plot_migr_class_communes_decades <- myFun_migrClassPlot(rast('results/r_rural_urban_classification_communes_2023-01-30.tif'), 
+plot_migr_class_communes_decades <- myFun_migrClassPlot(rast('../results/r_rural_urban_classification_communes.tif'), 
                                                         mgrLabels, 
                                                         'direction of rural and urban net-migration - communal',
                                                         colorpal = col, #scico(9,palette = 'roma'), 
@@ -165,12 +164,12 @@ p_colMgrClass <- tmap_arrange( plot_migr_class_countries_decades,
                                plot_migr_class_communes_decades,
                                nrow= 3, ncol = 1)
 
-tmap_save(p_colMgrClass,  filename = paste0("results/plots/Plot_MgrClassMaps_decadal_simplified",Sys.Date(),'.pdf'),width = 200, height=320, units='mm')
+tmap_save(p_colMgrClass,  filename = paste0("../figures/Plot_MgrClassMaps_decadal_simplified",'.pdf'),width = 200, height=320, units='mm')
 
 
 #### 3) Share of pop in each class ####
 
-myFun <- function(r_pop, r_zones, admLevel){
+myFun_sharePop <- function(r_pop, r_zones, admLevel){
   
   pop <- r_pop[[20]]
   pop_sum <- terra::global(pop, fun = 'sum', na.rm=T)
@@ -188,18 +187,18 @@ myFun <- function(r_pop, r_zones, admLevel){
 }
 
 # Load pop
-u_pop <- rast('DATA/popUrban.tif')
-r_pop <- rast('DATA/popRural.tif')
-t_pop <- rast('DATA/r_worldpopHarmonised.tif')
+u_pop <- rast('../results/popUrban.tif')
+r_pop <- rast('../results/popRural.tif')
+t_pop <- rast('../results/r_worldpopHarmonised.tif')
 
 # the percentage of people living in areas with certain directions
-dir_cntry <- rast('results/r_rural_urban_classification_countries_2023-02-06.tif') # replace date when necessary
-dir_prov <- rast('results/r_rural_urban_classification_counties_2023-02-06.tif')
-dir_comm <- rast('results/r_rural_urban_classification_communes_2023-02-06.tif')
+dir_cntry <- rast('../results/r_rural_urban_classification_countries.tif') # replace date when necessary
+dir_prov <- rast('../results/r_rural_urban_classification_counties.tif')
+dir_comm <- rast('../results/r_rural_urban_classification_communes.tif')
 
-dir_cntry_zonal <- myFun(t_pop, dir_cntry, 'cntry')
-dir_prov_zonal <-  myFun(t_pop, dir_prov, 'prov')
-dir_comm_zonal <- myFun(t_pop, dir_comm, 'comm')
+dir_cntry_zonal <- myFun_sharePop(t_pop, dir_cntry, 'cntry')
+dir_prov_zonal <-  myFun_sharePop(t_pop, dir_prov, 'prov')
+dir_comm_zonal <- myFun_sharePop(t_pop, dir_comm, 'comm')
 
 dir_pop_zonal <- left_join(dir_cntry_zonal, dir_prov_zonal) %>% left_join(., dir_comm_zonal) %>% 
   mutate(labels = c('zero net-migration',
@@ -211,7 +210,7 @@ dir_pop_zonal <- left_join(dir_cntry_zonal, dir_prov_zonal) %>% left_join(., dir
          shr_pop_prov = round(shr_pop_prov, digits = 2)*100,
          shr_pop_comm = round(shr_pop_comm, digits = 2)*100)
 
-readr::write_csv(dir_pop_zonal, paste0('results/share_of_population_ruralUrbanClass_', Sys.Date(),'.csv'))
+readr::write_csv(dir_pop_zonal, paste0('../results/share_of_population_ruralUrbanClass_','.csv'))
 
 
 

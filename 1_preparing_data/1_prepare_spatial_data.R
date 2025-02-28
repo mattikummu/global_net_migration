@@ -24,16 +24,17 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 #### load general data -----
 
 
-cntryID <- read_csv("data_in/countries_codes_and_coordinates.csv") %>% 
+cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>% 
   dplyr::select(-cntry_code) %>% 
   rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
-  select(cntry_code,iso2,iso3,Country)
+  select(cntry_code,iso2,iso3,Country)%>% 
+  distinct(GADM_code, iso3, cntry_code, .keep_all = T)
 
 
 
 ##### OECD ----
 
-oecdTL2_3 <- read.xlsx('data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
+oecdTL2_3 <- read.xlsx('../data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
   as_tibble() %>% 
   filter(TL == 2) %>% 
   filter(Gender == 'Total') %>% 
@@ -50,7 +51,7 @@ oecdTL2_3_sel <- oecdTL2_3 %>%
   arrange(tl2_id) 
 
 
-oecdPoly <- read_sf('data_in/oecd_tl2.gpkg') %>% 
+oecdPoly <- read_sf('../data_in_gpkg/oecd_tl2.gpkg') %>% 
   st_drop_geometry() %>% 
   right_join(oecdTL2_3_sel[,c(1,2)]) %>% 
   mutate(iso2 = substr(tl2_id,1,2)) %>% 
@@ -81,14 +82,28 @@ unique_countriesGIS <- unique(c(oecdPoly$iso3)) %>%
   filter(iso3 != 'CHN') # for china only one value 
 
 
-write_csv(unique_countriesGIS,'data_out/oecdMeta_deaths_tl2_dataANDgis.csv')
+# create data_out folder, if it does not exist
 
-write_csv(oecdTL2_3_sel,'data_out/oecd_deaths_tl2_data.csv')
+# Define the folder name
+folder_name <- "../data_out"
+
+# Check if the folder exists
+if (!dir.exists(folder_name)) {
+  # Create the folder if it doesn't exist
+  dir.create(folder_name)
+  message("Folder '", folder_name, "' created.")
+} else {
+  message("Folder '", folder_name, "' already exists.")
+}
+
+write_csv(unique_countriesGIS,'../data_out/oecdMeta_deaths_tl2_dataANDgis.csv')
+
+write_csv(oecdTL2_3_sel,'../data_out/oecd_deaths_tl2_data.csv')
 
 
 # OECD level 3 for US and Australia 
 
-oecdTL3 <- read.xlsx('data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
+oecdTL3 <- read.xlsx('../data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
   as_tibble() %>% 
   filter(TL == 3) %>% 
   filter(Gender == 'Total') %>% 
@@ -104,19 +119,13 @@ oecdTL3_sel <- oecdTL3 %>%
   select(TL,tl3_id,Region,iso2,iso3,Country,cntry_code,everything()) %>%
   arrange(tl3_id) 
 
-# oecdPoly_tl3 <- read_sf('data_in/oecd_tl3.gpkg') %>% 
-#   st_drop_geometry() %>% 
-#   right_join(oecdTL3_sel[,c(1,2)]) %>% 
-#   mutate(iso2 = substr(tl3_id,1,2)) %>% 
-#   left_join(cntryID,by='iso2') %>% 
-#   select(c(tl3_id,name_or,iso2,iso3.x,Country,cntry_code)) %>% 
-#   rename(iso3=iso3.x) 
 
-write_csv(oecdTL3_sel,'data_out/oecd_deaths_tl3_data.csv')
+
+write_csv(oecdTL3_sel,'../data_out/oecd_deaths_tl3_data.csv')
 
 # OECD level 3 for all countries
 
-oecdTL3 <- read.xlsx('data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
+oecdTL3 <- read.xlsx('../data_in/OECD_db_cude_death_rate_TL2_TL3.xlsx') %>% 
   as_tibble() %>% 
   filter(TL == 3) %>% 
   filter(Gender == 'Total') %>% 
@@ -132,7 +141,7 @@ oecdTL3_sel <- oecdTL3 %>%
   select(TL,tl3_id,Region,iso2,iso3,Country,cntry_code,everything()) %>%
   arrange(tl3_id) 
 
-oecdPoly_tl3 <- read_sf('data_in/oecd_tl3.gpkg') %>% 
+oecdPoly_tl3 <- read_sf('../data_in_gpkg/oecd_tl3.gpkg') %>% 
   st_drop_geometry() %>% 
   right_join(oecdTL3_sel[,c(1,2)]) %>% 
   mutate(iso2 = substr(tl3_id,1,2)) %>% 
@@ -145,13 +154,13 @@ oecdPoly_tl3 <- read_sf('data_in/oecd_tl3.gpkg') %>%
 ##### STAT compiler ----
 
 
-STATcompiler_data <- read.xlsx('data_in/STATcompiler_births_subnational.xlsx') %>% 
+STATcompiler_data <- read.xlsx('../data_in/STATcompiler_births_subnational.xlsx') %>% 
   as_tibble() %>% 
   filter(Characteristic == "Region") %>% 
   select(Country,Region,Year,Crude.birth.rate)
 
 
-STATcompiler_poly <- read_sf( 'data_in/STATcompiler_areas.gpkg' ) %>% 
+STATcompiler_poly <- read_sf( '../data_in_gpkg/STATcompiler_areas.gpkg' ) %>% 
   st_drop_geometry() %>% 
   select(ISO,CNTRYNAMEE,DHSREGEN) %>% 
   rename(iso2 = ISO) %>% 
@@ -180,24 +189,24 @@ unique_STATcompiler_countriesData <- unique(c(STATcompiler_data_sel$Country)) %>
   select(iso2,cntry_code,iso3,Country)
 
 
-readr::write_csv(STATcompiler_data_sel,'data_out/STATcompiler_birth_dataWide.csv')
+readr::write_csv(STATcompiler_data_sel,'../data_out/STATcompiler_birth_dataWide.csv')
 
-readr::write_csv(unique_STATcompiler_countriesData,'data_out/STATcompilerMeta_birth_data.csv')
+readr::write_csv(unique_STATcompiler_countriesData,'../data_out/STATcompilerMeta_birth_data.csv')
 
 
 #### EUROSTAT -------
 
-eurostatBirths_data_nuts3 <- read_csv('data_in/eurostat_births_nuts2.csv') %>% 
+eurostatBirths_data_nuts3 <- read_csv('../data_in/eurostat_births_nuts2.csv') %>% 
   filter(age=='TOTAL') %>% 
   rename(NUTS = region) %>% 
   select(-c(unit,age))
 
-eurostatBirths_data <- read_csv('data_in/eurostat_births_nuts2.csv') %>% 
+eurostatBirths_data <- read_csv('../data_in/eurostat_births_nuts2.csv') %>% 
   filter(age=='TOTAL') %>% 
   rename(NUTS = region) %>% 
   select(-c(unit,age))
 
-eurostat_poly <- read_sf('data_in/nuts2_corGeom.gpkg') %>% 
+eurostat_poly <- read_sf('../data_in_gpkg/nuts2_corGeom.gpkg') %>% 
   st_drop_geometry() %>% 
   select(NUTS,NAME,NUTS0)
 
@@ -220,18 +229,18 @@ unique_Eurostat_NUTS2 <- unique(c(eurostatBirths_data_sel$NUTS)) %>%
   mutate(rowID = row_number()) %>% 
   rename(NUTS = value)
 
-write_csv(eurostatBirths_data_sel,'data_out/eurostat_birth_dataWide.csv')
+write_csv(eurostatBirths_data_sel,'../data_out/eurostat_birth_dataWide.csv')
 
-write_csv(unique_Eurostat_countriesData,'data_out/eurostatMeta_birth_data.csv')
+write_csv(unique_Eurostat_countriesData,'../data_out/eurostatMeta_birth_data.csv')
 
 
 
-# eurostat_gis <- read_sf('data_in/ref-nuts-2016-01m.shp/NUTS_RG_01M_2016_3035_LEVL_2.shp/NUTS_RG_01M_2016_3035_LEVL_2.shp') %>% 
+# eurostat_gis <- read_sf('../data_in/ref-nuts-2016-01m.shp/NUTS_RG_01M_2016_3035_LEVL_2.shp/NUTS_RG_01M_2016_3035_LEVL_2.shp') %>% 
 #   select(NUTS_ID,CNTR_CODE,NUTS_NAME)
 # 
-# eurostat_gis <- read_sf('data_in/Europe_NUTS2_Boundaries.lpk')
+# eurostat_gis <- read_sf('../data_in/Europe_NUTS2_Boundaries.lpk')
 # 
-# write_sf(eurostat_gis, 'data_in/NUTS_level2.gpkg')
+# write_sf(eurostat_gis, '../data_in/NUTS_level2.gpkg')
 
 
 #### EUROSTAT as a ratio -----
@@ -239,65 +248,10 @@ write_csv(unique_Eurostat_countriesData,'data_out/eurostatMeta_birth_data.csv')
 # from number of deaths to ratio
 
 
-
-# 
-# # population on RO31 (Sud - Muntenia) increases over the last 10 yr from 3M to 17M in worldpop
-# # let's scale year 2010 values with pop_HYDE
-# 
-# pop_worldPop <- rast('data_in/ppp_2000_2020_5arcmin_corrected.tif')
-# pop_HYDE <- rast('data_in/pop_1990_2020_hyde32.tif')
-# 
-# # project to same extent
-# pop_HYDE_proj <- terra::project(pop_HYDE,subset(pop_worldPop,1))
-# 
-# deltaPop <- subset(pop_worldPop,11) / subset(pop_HYDE_proj,21) 
-# 
-# # in case of zero population in popHyde, keep delta as 1 (i.e. no change)
-# deltaPop[is.infinite(deltaPop)] <- 1
-# 
-# 
-# eurostat_poly_sf <- read_sf('data_in/nuts2_corGeom.gpkg') %>% 
-#   select(NUTS,NAME,NUTS0) %>% 
-#   mutate(id = row_number())
-# 
-# eurostat_poly_rast <- terra::rasterize(vect(eurostat_poly_sf),subset(pop_worldPop,1),field= 'id')
-# 
-# # repeat raster
-# eurostat_poly_rast_repl <- rast(lapply(1:nlyr(pop_worldPop), function(i) eurostat_poly_rast)) 
-# 
-# pop_worldPop_delta <- c(subset(pop_worldPop,1:10),deltaPop*subset(pop_HYDE_proj,21:31))
-# 
-# # find id from eurorstat polygon
-# RO31_sf <- eurostat_poly_sf %>% 
-#   filter(NUTS == 'RO31')
-# 
-# # change values within RO31 to those from delta changed HYDE
-# 
-# # pop_worldPop_fixed <- subset(pop_worldPop,21)
-# 
-# pop_worldPop_fixed <- pop_worldPop
-# 
-# pop_worldPop_fixed[eurostat_poly_rast_repl == RO31_sf$id] <- pop_worldPop_delta  #[eurostat_poly_rast == RO31_sf$id]
-# 
-# # # check
-# # pop_extract <- terra::extract(subset(pop_worldPop,21),vect(eurostat_poly_sf),na.rm=T,fun='sum') %>% 
-# #   dplyr::bind_cols(terra::extract(subset(pop_worldPop_fixed,21),vect(eurostat_poly_sf),na.rm=T,fun='sum') )
-# 
-# # temp <- stack(subset(pop_worldPop_delta,21))
-# # 
-# # # introduce na in rst1 for all locations that are non-na in rst2
-# # pop_worldPop_fixed <- overlay(stack(subset(pop_worldPop,21)), stack(eurostat_poly_rast), fun = function(x, y) {
-# #   x[y == RO31_sf$id] <- NA
-# #   return(x)
-# # })
-# 
-# writeRaster(pop_worldPop_fixed,paste0('data_in/ppp_2000_2020_5arcmin_corrected_fixed.tif'),  gdal="COMPRESS=LZW",overwrite=TRUE)
-# 
-
-eurostat_poly_sf <- read_sf('data_in/nuts2_corGeom.gpkg') %>%
+eurostat_poly_sf <- read_sf('../data_in_gpkg/nuts2_corGeom.gpkg') %>%
   select(NUTS,NAME,NUTS0)
 # now read in the fixed population data
-pop_worldPop <- rast('data_in/ppp_2000_2020_5arcmin_corrected_fixed.tif')
+pop_worldPop <- rast('../data_in_rast/ppp_2000_2020_5arcmin_corrected_fixed.tif')
 
 
 
@@ -322,14 +276,14 @@ eurostat_poly_sf_mod <- eurostat_poly_sf %>%
   ungroup() 
 
 # read eurostat data
-EuS_deaths_nuts2 <- read_excel('data_in/eurostat_deaths_nuts2.xls',skip = 8) %>% 
+EuS_deaths_nuts2 <- read_excel('../data_in/eurostat_deaths_nuts2.xls',skip = 8) %>% 
   as_tibble() 
-EuS_deaths_nuts1 <- read_excel('data_in/eurostat_deaths_nuts1.xls',skip = 8) %>% 
+EuS_deaths_nuts1 <- read_excel('../data_in/eurostat_deaths_nuts1.xls',skip = 8) %>% 
   as_tibble() 
 
-EuS_births_nuts2 <- read_excel('data_in/eurostat_births_nuts2.xls',skip = 8) %>% 
+EuS_births_nuts2 <- read_excel('../data_in/eurostat_births_nuts2.xls',skip = 8) %>% 
   as_tibble() 
-EuS_births_nuts1 <- read_excel('data_in/eurostat_births_nuts1.xls',skip = 8) %>% 
+EuS_births_nuts1 <- read_excel('../data_in/eurostat_births_nuts1.xls',skip = 8) %>% 
   as_tibble() 
 
 ## DEATHS
@@ -442,14 +396,33 @@ vect_eurostat_poly_death_data <- eurostat_poly_death_data %>%
   as("Spatial") %>%
   vect()
 
+
+# create results folder, if it does not exist
+
+# Define the folder name
+folder_name <- "../results"
+
+# Check if the folder exists
+if (!dir.exists(folder_name)) {
+  # Create the folder if it doesn't exist
+  dir.create(folder_name)
+  message("Folder '", folder_name, "' created.")
+} else {
+  message("Folder '", folder_name, "' already exists.")
+}
+
+# write results
+
 r_EuS_births <- terra::rasterize(vect_eurostat_poly_birth_data,pop_worldPop,field = 'X2015')
-writeRaster(r_EuS_births,'results/euroStatBirths_2015.tif',  gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(r_EuS_births,'../results/euroStatBirths_2015.tif',  gdal="COMPRESS=LZW",overwrite=TRUE)
 
 r_EuS_deaths <- terra::rasterize(vect_eurostat_poly_death_data,pop_worldPop,field = 'X2015')
-writeRaster(r_EuS_deaths,'results/euroStatDeaths_2015.tif',  gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(r_EuS_deaths,'../results/euroStatDeaths_2015.tif',  gdal="COMPRESS=LZW",overwrite=TRUE)
 
-st_write(eurostat_poly_birth_data, "results/eurostat_poly_birth_data.gpkg",delete_dsn = TRUE)
-st_write(eurostat_poly_death_data, "results/eurostat_poly_death_data.gpkg", delete_dsn = TRUE)
+st_write(eurostat_poly_birth_data, "../results/eurostat_poly_birth_data.gpkg",delete_dsn = TRUE)
+st_write(eurostat_poly_death_data, "../results/eurostat_poly_death_data.gpkg", delete_dsn = TRUE)
+
+# some checking
 
 eurostat_poly_birth_data %>% filter(NUTS == 'UKM789')
 eurostat_poly_birth_data %>% filter(NUTS == 'RO31')

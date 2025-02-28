@@ -23,24 +23,24 @@ library(tibble)
 # Rural-urban extent (based on scaled population density and urban pop share for each country)
 # 0 = rural
 # 1 = urban
-urbanExt <- rast('DATA/r_urbExtent_FixedExt.tif') 
+urbanExt <- rast('../results/r_urbExtent_FixedExt.tif') 
 # Subset to correct timespan
 urbanExt <- terra::subset(urbanExt, 2:21)
 
 # Net-migration (annual) 2001-2020
-netMgr <- terra::rast("DATA/netMgr_2001_2020_v3.tif")
+netMgr <- terra::rast("../results/netMgr_2001_2020_v3.tif")
 names(netMgr)
 
 # Extract net-migration in urban areas
 # urban areas = 1 in urbanExt
 netMgrUrban <- netMgr*urbanExt
-terra::writeRaster(netMgrUrban, "DATA/netMigrUrban.tif", overwrite = T)
+terra::writeRaster(netMgrUrban, "../results/netMigrUrban.tif", overwrite = T)
 
 # Extract net-migration in rural areas
 # rural areas = 0 in MGUP
 netMgrRural <- netMgr
 netMgrRural[urbanExt == 1] <- NA 
-terra::writeRaster(netMgrRural, "DATA/netMigrRural.tif", overwrite = T)
+terra::writeRaster(netMgrRural, "../results/netMigrRural.tif", overwrite = T)
 
 
 #### 2) Calulate zonal stats for each admin unit ####
@@ -52,18 +52,18 @@ regions_df <- readr::read_csv("DATA/countriesRegionsZones.csv") %>%
   unique()
 
 # Countries
-countries <- terra::rast("DATA/gadm_lev0_5arcmin.tif")
+countries <- terra::rast("../data_in_rast/gadm_lev0_5arcmin.tif")
 
 # Counties/provinces
-counties <- terra::rast("DATA/gadm_lev1_5arcmin.tif")
+counties <- terra::rast("../data_in_rast/gadm_lev1_5arcmin.tif")
 
 # Communes
-communes <- terra::rast("DATA/gadm_lev2_5arcmin.tif")
+communes <- terra::rast("../data_in_rast/gadm_lev2_5arcmin.tif")
 
 # Pop data (annual) for 2000-2020
-pop <- terra::rast("DATA/r_worldpopHarmonised.tif")
-urbanPop <- terra::rast('DATA/popUrban.tif')
-ruralPop <- terra::rast('DATA/popRural.tif')
+pop <- terra::rast("../results/r_worldpopHarmonised.tif")
+urbanPop <- terra::rast('../results/popUrban.tif')
+ruralPop <- terra::rast('../results/popRural.tif')
 
 # Subset to correct timespan
 timesteps <- seq(2001, 2020,1)
@@ -173,7 +173,7 @@ Plot_MgrRegionsGlobal <-  migr_globalRegional %>% filter(variable %in% c("UrbanP
   labs(title="Net-migration in rural and urban areas in each region (relative to pop in rural and urban areas in each region)",
        x ="Year", y = "Net-migration per 1000 pop")
 
-ggsave(Plot_MgrRegionsGlobal,  filename = paste0("results/plots/Plot_MgrRegionsGlobal",Sys.Date(),'.pdf'),width = 320, height=160, units='mm')
+ggsave(Plot_MgrRegionsGlobal,  filename = paste0("../figures/Plot_MgrRegionsGlobal",Sys.Date(),'.pdf'),width = 320, height=160, units='mm')
 
 
 #### Cumulative sum of urban and rural net-migration (Figure S6) ####
@@ -237,14 +237,14 @@ myFun_create_rasterMap <- function(r_index, r_mgr_df, variableName, mybreaks,col
 
 
 # Create country boarders from cntry raster
-sf_gadm0 <- terra::as.polygons(rast('DATA/gadm_lev0_5arcmin.tif')) %>% 
+sf_gadm0 <- terra::as.polygons(rast('../data_in_rast/gadm_lev0_5arcmin.tif')) %>% 
   sf::st_as_sf() %>% # to sf
   rmapshaper::ms_simplify(.,keep=0.1,keep_shapes = T) # simplify
 
 # Load data
-r_gadm_lev0_5arcmin <- rast('DATA/gadm_lev0_5arcmin.tif')
-r_gadm_lev1_5arcmin <- rast('DATA/gadm_lev1_5arcmin.tif')
-r_gadm_lev2_5arcmin <- rast('DATA/gadm_lev2_5arcmin.tif')
+r_gadm_lev0_5arcmin <- rast('../data_in_rast/gadm_lev0_5arcmin.tif')
+r_gadm_lev1_5arcmin <- rast('../data_in_rast/gadm_lev1_5arcmin.tif')
+r_gadm_lev2_5arcmin <- rast('../data_in_rast/gadm_lev2_5arcmin.tif')
 
 
 # Calculate cumulative sums 
@@ -307,15 +307,15 @@ p_colMgrPlot <- tmap_arrange(plot_cntries_u,plot_cntries_r,
                              plot_communes_u, plot_communes_r,
                              ncol = 2, nrow=3)
 
-tmap_save(p_colMgrPlot,filename = paste0("results/plots/Plots_MgrCumSum",Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
+tmap_save(p_colMgrPlot,filename = paste0("../fugures/Plots_MgrCumSum",Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
 
 
 
 #### Urban and rural net-migration maps (gridded) (Figure S5) ####
 
 #### Plot urb & rural migration plots for 2000, 2010, 2019
-urbanMgr <- rast("DATA/netMigrUrban.tif")
-ruralMgr <- rast("DATA/netMigrRural.tif")
+urbanMgr <- rast("../results/netMigrUrban.tif")
+ruralMgr <- rast("../results/netMigrRural.tif")
 
 timesteps <- c(1,10,19)
 
@@ -359,7 +359,7 @@ ruralMgr_map <- myFun_create_Map(r_raster = ruralMgr,
                                  titleLabel = "Net-migration in rural areas",
                                  tocrs = "+proj=robin +over")
 
-tmap_save(tmap_arrange(urbanMgr_map, ruralMgr_map, ncol = 2), paste0('results/plots/urbanRuralMgr_grid_', Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
+tmap_save(tmap_arrange(urbanMgr_map, ruralMgr_map, ncol = 2), paste0('../fugures/urbanRuralMgr_grid_', Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
 
 
 

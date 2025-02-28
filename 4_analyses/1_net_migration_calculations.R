@@ -4,7 +4,8 @@ library(terra)
 library(sf)
 library(dplyr)
 library(tmap)
-library(tidyr)
+
+
 library(RCurl)
 library(openxlsx)
 library(Kendall)
@@ -12,7 +13,10 @@ library(scico)
 library(rnaturalearth)
 library(rmapshaper)
 library(readr)
+library(ggplot2)
 
+library(tidyterra)
+library(tidyr)
 
 # set working directory the path that this script is located in
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -21,13 +25,13 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 # read data
 
-cntryID <- read_csv("data_in/countries_codes_and_coordinates.csv") %>% 
+cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>% 
   dplyr::select(-cntry_code) %>% 
   rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
   select(cntry_code,iso2,iso3,Country) %>% 
   mutate(iso2 = ifelse(Country == 'Namibia','NB',iso2))
 
-sf_gadm_lev0 <- read_sf("data_in/gadm_level0.gpkg")%>%
+sf_gadm_lev0 <- read_sf("../data_in_gpkg/gadm_level0.gpkg")%>%
   st_drop_geometry() %>% 
   select(GID_0,NAME_0) %>% 
   rename(iso3 = GID_0) %>% 
@@ -37,7 +41,7 @@ sf_gadm_lev0 <- read_sf("data_in/gadm_level0.gpkg")%>%
   arrange(iso3)
 
 
-sf_gadm_lev1 <- read_sf( 'data_in/gadm_lev1.gpkg' ) %>% 
+sf_gadm_lev1 <- read_sf( '../data_in_gpkg/gadm_lev1.gpkg' ) %>% 
   st_drop_geometry() %>% 
   select(GID_0,NAME_0,NAME_1,GID_1) %>% 
   rename(iso3 = GID_0) %>% 
@@ -48,7 +52,7 @@ sf_gadm_lev1 <- read_sf( 'data_in/gadm_lev1.gpkg' ) %>%
   select(Country,iso3,cntry_code,GID_1,nmbr) %>% 
   arrange(iso3)
 
-sf_gadm_lev2 <- read_sf( 'data_in/gadm_lev2.gpkg' ) %>% 
+sf_gadm_lev2 <- read_sf( '../data_in_gpkg/gadm_lev2.gpkg' ) %>% 
   st_drop_geometry() %>% 
   select(GID_0,NAME_0,NAME_1,GID_1, NAME_2,GID_2) %>% 
   rename(iso3 = GID_0) %>% 
@@ -60,13 +64,13 @@ sf_gadm_lev2 <- read_sf( 'data_in/gadm_lev2.gpkg' ) %>%
   arrange(iso3)
 
 
-# sf_gadm_lev1 <- st_read("data_in/gadm_lev1.gpkg") %>% 
+# sf_gadm_lev1 <- st_read("../data_in/gadm_lev1.gpkg") %>% 
 #   mutate(nmbr = row_number()) %>%
 #   st_as_sf() 
 
-r_gadm_lev0_5arcmin <- rast('data_in/gadm_lev0_5arcmin.tif')
-r_gadm_lev1_5arcmin <- rast('data_in/gadm_lev1_5arcmin.tif')
-r_gadm_lev2_5arcmin <- rast('data_in/gadm_lev2_5arcmin.tif')
+r_gadm_lev0_5arcmin <- rast('../data_in_rast/gadm_lev0_5arcmin.tif')
+r_gadm_lev1_5arcmin <- rast('../data_in_rast/gadm_lev1_5arcmin.tif')
+r_gadm_lev2_5arcmin <- rast('../data_in_rast/gadm_lev2_5arcmin.tif')
 
 #### setup the calculations ----
 
@@ -78,20 +82,20 @@ MODE = 'annual'
 CALC = 'impactMgrPop' 
 
 if(MODE == '3yr') {
-  r_netMigration <- rast('results/netMgr_2001_2020_v3_3yrSum.tif')
-  r_pop <- rast('results/r_worldpopHarmonised_3yrMean.tif')
+  r_netMigration <- rast('../results/netMgr_2001_2020_v3_3yrSum.tif')
+  r_pop <- rast('../results/r_worldpopHarmonised_3yrMean.tif')
   timeSteps <- seq(2002,2020,3)
   TSlength <- 3
   TSlength_last <- 2
 } else if(MODE == '5yr') {
-  r_netMigration <- rast('results/netMgr_2001_2020_v3_5yrSum.tif')
-  r_pop <- rast('results/r_worldpopHarmonised_5yrMean.tif')
+  r_netMigration <- rast('../results/netMgr_2001_2020_v3_5yrSum.tif')
+  r_pop <- rast('../results/r_worldpopHarmonised_5yrMean.tif')
   timeSteps <- seq(2003,2018,5)
   TSlength <- 5
   TSlength_last <- 5
 } else {
-  r_netMigration <- rast('results/netMgr_2001_2020_v3.tif')
-  r_pop <- rast('results/r_worldpopHarmonised.tif')
+  r_netMigration <- rast('../results/netMgr_2001_2020_v3.tif')
+  r_pop <- rast('../results/r_worldpopHarmonised.tif')
   timeSteps <- c(2001:2020)
   TSlength <- 1
   TSlength_last <- 1
@@ -102,106 +106,14 @@ if(MODE == '3yr') {
 #### define functions -----
 
 # function to calculate slope
-funSlope <- function(x) {
-  
-  time <- 1:length(timeSteps)
-  if (is.na(x[1])) {
-    return (NA)
-  } else {
-    x.a = as.array(x)
-    m = lm(x.a ~ time)
-    return (summary(m)$coefficients[2])
-  }
-}
+source('../functions/f_funSlope.R')
 
 # function to calculate the role of net migration in population change
-myFunMgrImpactPop <- function(r_adm, r_popData, r_mgrData, nameOutput) {  
-  
-  #r_adm <- r_gadm_lev0_5arcmin
-  adm_popChange <- as_tibble(terra::zonal(subset(r_popData,nlyr(r_popData)),r_adm, fun = sum, na.rm=T)) %>% 
-    left_join(as_tibble(terra::zonal(subset(r_popData,1),r_adm, fun = sum, na.rm=T))) %>% 
-    mutate(popChange = cntryPop2020 - cntryPop2000) 
-  
-  # then net-migration over the whole study period
-  adm_netMgr <- as_tibble(terra::zonal(r_mgrData,r_adm, fun = sum, na.rm=T)) %>% 
-    rowwise() %>% 
-    mutate(netMgrSum = sum(c_across(contains("net")))) %>% 
-    ungroup() %>% 
-    select(1,netMgrSum)
-  
-  # combine
-  adm_popChngMgr <- adm_popChange %>% 
-    left_join(adm_netMgr) %>% 
-    # calculate population change without migration
-    mutate(popChng_woMgr = popChange - netMgrSum) %>% 
-    # calculate whether natural growth or migration impacts more on pop change
-    mutate(rolePopMgr = 1-popChng_woMgr/popChange) %>% 
-    # check whether 
-    # migration increases pop growth: 3
-    # migration decreases pop growth: 2
-    # migration turns pop growth to declined pop: 1
-    # migration exalarate pop decline: -3
-    # migration slows pop decline: -2
-    # migration turns pop decline to growth: -1
-    mutate(popMgr_classif = if_else((popChng_woMgr > 0 & netMgrSum > 0), 3,
-                                    if_else((popChange > 0 & netMgrSum < 0), 2,
-                                            if_else((popChng_woMgr > 0 & popChange < 0), 1,
-                                                    if_else((popChng_woMgr < 0 & netMgrSum < 0), -3,
-                                                            if_else((popChange < 0 & netMgrSum > 0), -2,
-                                                                    if_else((popChng_woMgr < 0 & popChange > 0), -1,#0)))))))
-                                                                            0
-                                                                    ))))))) 
-  
-  
-  adm_popChngMgr_summary <- adm_popChngMgr %>% 
-    group_by(popMgr_classif) %>% 
-    summarise_at(vars(contains('cntryPop2020')),list(sum))%>%
-    ungroup()
-  
-  
-  # put the classification to a raster
-  r_adm_class <- classify(r_adm,
-                          cbind(adm_popChngMgr[,1], adm_popChngMgr$popMgr_classif))
-  
-  r_adm_roleMgrInPopChange <- classify(r_adm,
-                                       cbind(adm_popChngMgr[,1], adm_popChngMgr$rolePopMgr))
-  #plot(r_adm_class)
-  
-  writeRaster(r_adm_class,paste0('results/r_',nameOutput,'_',Sys.Date(),'.tif'),  gdal="COMPRESS=LZW",overwrite=TRUE)
-  return(adm_popChngMgr)
-}
+source('../functions/myFunMgrImpactPop.R')
 
 # plot raster
 
-myFun_create_rasterMap <- function(r_index, nameLabels, titleLabel, colorpal,
-                                   tocrs = NA){
-  
-  # project to another crs
-  if (!is.na(tocrs)){
-    r_index <- project(r_index, tocrs, mask = TRUE)
-  }
-  
-  # create tmap object
-  index_map <- tm_shape(r_index) +
-    tm_raster(style = "fixed", # draw gradient instead of classified
-              breaks = c(-3.5,-2.5,-1.5,-0.5,.5,1.5,2.5,3.5),
-              palette = colorpal,
-              labels = nameLabels,
-              showNA = F,
-              colorNA = 'white',
-              title = titleLabel,
-              legend.reverse = TRUE) +
-    tm_shape(sf_gadm0)+
-    tm_borders(col='grey',
-               lwd = 0.1)+
-    tm_layout(main.title.position = "left",
-              legend.bg.color = TRUE,
-              legend.outside = TRUE,
-              frame = FALSE)
-  
-  return (index_map)
-  
-}
+source('../functions/myFun_create_rasterMap.R')
 
 
 #### impact of migration on population growth / decline ----
@@ -218,8 +130,8 @@ if(MODE == 'annual' & CALC == 'impactMgrPop') {
   cntry_popChngMgr <- myFunMgrImpactPop(r_gadm_lev0_5arcmin,r_pop, r_netMigration,'cntryClassRoleMgr')
   
   # plot
-  library(rmapshaper)
-  sf_gadm0 <- terra::as.polygons(rast('data_in/gadm_lev0_5arcmin.tif')) %>% 
+ 
+  sf_gadm0 <- terra::as.polygons(rast('../data_in_rast/gadm_lev0_5arcmin.tif')) %>% 
     sf::st_as_sf() %>% # to sf
     rmapshaper::ms_simplify(.,keep=0.1,keep_shapes = T) # simplify
   
@@ -232,19 +144,19 @@ if(MODE == 'annual' & CALC == 'impactMgrPop') {
                     'migration slows pop growth',
                     'migration increases pop growth')
   
-  p_comm <- myFun_create_rasterMap(rast('results/r_commClassRoleMgr_2021-12-15.tif'),
+  p_comm <- myFun_create_rasterMap(rast('../results/r_commClassRoleMgr.tif'),
                                    mgrPopLabels,
                                    'impact of migration on pop change - communal',
                                    colorpal = scico(9,palette = 'roma'),
                                    tocrs = "+proj=robin +over")
   
-  p_prov <- myFun_create_rasterMap(rast('results/r_provClassRoleMgr_2021-12-15.tif'),
+  p_prov <- myFun_create_rasterMap(rast('../results/r_provClassRoleMgr.tif'),
                                    mgrPopLabels,
                                    'impact of migration on pop change - provincial',
                                    colorpal = scico(9,palette = 'roma'),
                                    tocrs = "+proj=robin +over")
   
-  p_cntry <- myFun_create_rasterMap(rast('results/r_cntryClassRoleMgr_2021-12-15.tif'),
+  p_cntry <- myFun_create_rasterMap(rast('../results/r_cntryClassRoleMgr.tif'),
                                     mgrPopLabels,
                                     'impact of migration on pop change - country',
                                     colorpal = scico(9,palette = 'roma'),
@@ -252,7 +164,7 @@ if(MODE == 'annual' & CALC == 'impactMgrPop') {
   
   p_colMgrPop <- tmap_arrange(p_comm,p_prov, p_cntry, ncol = 1)
   
-  tmap_save(p_colMgrPop,filename = paste0('figures/mapsMgrImpactPop',Sys.Date(),'.pdf'),width = 160, height=160, units='mm')
+  tmap_save(p_colMgrPop,filename = paste0('../figures/mapsMgrImpactPop.pdf'),width = 160, height=160, units='mm')
   
   
   
@@ -319,7 +231,7 @@ comm_netMigr_rel <- cbind( comm_popSel['nmbr2'],
   mutate(across(-c(nmbr2,commNet2020,commNetMgrSum), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(commNetMgrSlope = funSlope(c_across(-c(nmbr2,commNetMgrSum)))) %>%
+  mutate(commNetMgrSlope = f_funSlope(c_across(-c(nmbr2,commNetMgrSum)))) %>%
   ungroup() %>% 
   select(nmbr2,commNetMgrSum,commNetMgrSlope,everything())
 
@@ -370,13 +282,13 @@ subnat_netMigr_rel <- cbind( subnat_popSel['nmbr'],
   mutate(across(-c(nmbr,subnatNet2020,subnatNetMgrSum), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(subnatNetMgrSlope = funSlope(c_across(-c(nmbr,subnatNetMgrSum)))) %>%
+  mutate(subnatNetMgrSlope = f_funSlope(c_across(-c(nmbr,subnatNetMgrSum)))) %>%
   ungroup() %>% 
   select(nmbr,subnatNetMgrSum,subnatNetMgrSlope,everything())
 
 
 # rowwise() %>%
-#   mutate(IntraProvSlope = funSlope(c_across(contains("Provincial")))) %>%
+#   mutate(IntraProvSlope = f_funSlope(c_across(contains("Provincial")))) %>%
 #   ungroup() %>% 
 
 # cbind( subnat_netMigr['nmbr'],
@@ -408,23 +320,25 @@ comm_balance <- comm_netMigr %>%
 
 # then calculate for each subnat the sum of in and out migration based on communal calculations
 
+# Create a dataframe for "out" where positive values are set to 0
 subnat_comm_out <- comm_balance %>% 
-  mutate_at(vars(contains('commNet')), function(x) ifelse(x>0, 0, x)) %>% 
+  mutate(across(contains('commNet'), ~ ifelse(. > 0, 0, .))) %>% 
   group_by(GID_1) %>% 
-  summarise_at(vars(contains('commNet')),list(sum))%>% 
-  ungroup()%>% 
-  left_join(sf_gadm_lev1)  %>% 
-  select(-c(GID_1,Country,iso3,cntry_code)) %>% 
-  select(nmbr,everything())
+  summarise(across(contains('commNet'), sum, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(sf_gadm_lev1, by = "GID_1") %>% 
+  select(-c(GID_1, Country, iso3, cntry_code)) %>% 
+  select(nmbr, everything())
 
+# Create a dataframe for "in" where negative values are set to 0
 subnat_comm_in <- comm_balance %>% 
-  mutate_at(vars(contains('commNet')), function(x) ifelse(x<0, 0, x)) %>% 
+  mutate(across(contains('commNet'), ~ ifelse(. < 0, 0, .))) %>% 
   group_by(GID_1) %>% 
-  summarise_at(vars(contains('commNet')),list(sum)) %>% 
-  ungroup()%>% 
-  left_join(sf_gadm_lev1)  %>% 
-  select(-c(GID_1,Country,iso3,cntry_code)) %>% 
-  select(nmbr,everything())
+  summarise(across(contains('commNet'), sum, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(sf_gadm_lev1, by = "GID_1") %>% 
+  select(-c(GID_1, Country, iso3, cntry_code)) %>% 
+  select(nmbr, everything())
 
 names(subnat_comm_in) <- c('nmbr',paste0('subnat_comm_in',timeSteps))
 names(subnat_comm_out) <- c('nmbr',paste0('subnat_comm_out',timeSteps))
@@ -450,7 +364,7 @@ subnat_comm_internalMigr <- apply(subnat_comm_array, c(1,2), min) %>%
   mutate(across(-c(nmbr,V8,IntraProvMigrSum), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('V8'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(IntraProvSlope = funSlope(c_across(-c(nmbr,IntraProvMigrSum)))) %>%
+  mutate(IntraProvSlope = f_funSlope(c_across(-c(nmbr,IntraProvMigrSum)))) %>%
   ungroup() %>% 
   left_join(sf_gadm_lev1) %>% 
   select(cntry_code,iso3,Country,GID_1,nmbr,IntraProvMigrSum,IntraProvSlope,everything())
@@ -477,7 +391,7 @@ subnat_internalMigr_rel <- cbind( subnat_internalMigr_pop['nmbr'],
   mutate(across(-c(nmbr,IntraProvincial2020,IntraProvMigrSum), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(IntraProvSlope = funSlope(c_across(-c(nmbr,IntraProvMigrSum)))) %>%
+  mutate(IntraProvSlope = f_funSlope(c_across(-c(nmbr,IntraProvMigrSum)))) %>%
   ungroup() %>% 
   left_join(sf_gadm_lev1) %>% 
   select(cntry_code,iso3,Country,GID_1,nmbr,IntraProvMigrSum,IntraProvSlope,everything())
@@ -535,7 +449,7 @@ cntry_intraProvMigrRel <- cbind( cntry_popSel['cntry_code'],
   mutate(across(-c(cntry_code,IntraProvincial2020,IntraProvMigrSum), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(IntraProvSlope = funSlope(c_across(-c(cntry_code,IntraProvMigrSum)))) %>%
+  mutate(IntraProvSlope = f_funSlope(c_across(-c(cntry_code,IntraProvMigrSum)))) %>%
   ungroup() %>% 
   left_join(sf_gadm_lev0) %>% 
   select(cntry_code,iso3,Country,IntraProvMigrSum, IntraProvSlope,everything())
@@ -552,15 +466,17 @@ subnat_balance <- subnat_netMigr %>%
 
 # then calculate for each country the sum of in and out migration based on subnat calculations
 
+# Create a data frame for "out" where positive values in 'subnatNet' columns are set to 0
 cntry_subnat_out <- subnat_balance %>% 
-  mutate_at(vars(contains('subnatNet')), function(x) ifelse(x>0, 0, x)) %>% 
-  group_by(cntry_code) %>% 
-  summarise_at(vars(contains('subnatNet')),list(sum))
+  mutate(across(contains('subnatNet'), ~ ifelse(. > 0, 0, .))) %>%
+  group_by(cntry_code) %>%
+  summarise(across(contains('subnatNet'), sum, na.rm = TRUE))
 
+# Create a data frame for "in" where negative values in 'subnatNet' columns are set to 0
 cntry_subnat_in <- subnat_balance %>% 
-  mutate_at(vars(contains('subnatNet')), function(x) ifelse(x<0, 0, x)) %>% 
-  group_by(cntry_code) %>% 
-  summarise_at(vars(contains('subnatNet')),list(sum))
+  mutate(across(contains('subnatNet'), ~ ifelse(. < 0, 0, .))) %>%
+  group_by(cntry_code) %>%
+  summarise(across(contains('subnatNet'), sum, na.rm = TRUE))
 
 names(cntry_subnat_in) <- c('cntry_code',paste0('cntry_subnat_in',timeSteps))
 names(cntry_subnat_out) <- c('cntry_code',paste0('cntry_subnat_out',timeSteps))
@@ -607,7 +523,7 @@ cntry_interProvMigrRel <- cbind( cntry_popSel['cntry_code'],
   mutate(across(-c(cntry_code,interProvMgr2020,InterProvMigrSum,Country,iso3), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(InterProvSlope = funSlope(c_across(-c(cntry_code,InterProvMigrSum,Country,iso3)))) %>%
+  mutate(InterProvSlope = f_funSlope(c_across(-c(cntry_code,InterProvMigrSum,Country,iso3)))) %>%
   ungroup() %>% 
   select(cntry_code,iso3,Country,InterProvMigrSum,InterProvSlope,everything())
 
@@ -635,7 +551,7 @@ cntry_netMigrRel <- cbind( cntry_popSel['cntry_code'],
   mutate(across(-c(cntry_code,cntry_netMgr2020,InterNatMigrSum,Country,iso3), ~ . / TSlength)) %>% # three year mean; here we divide by three
   mutate(across(contains('2020'), ~ . / TSlength_last)) %>% # except the last timestep with 2 yr
   rowwise() %>% 
-  mutate(InterNatSlope = funSlope(c_across(-c(cntry_code,InterNatMigrSum,Country,iso3)))) %>%
+  mutate(InterNatSlope = f_funSlope(c_across(-c(cntry_code,InterNatMigrSum,Country,iso3)))) %>%
   ungroup() %>% 
   select(cntry_code, iso3, Country, InterNatMigrSum, InterNatSlope, everything())
 
@@ -643,19 +559,28 @@ cntry_netMigrRel <- cbind( cntry_popSel['cntry_code'],
 names(cntry_netMigrRel) <- c('cntry_code', 'iso3','Country',
                              'InterNatMigrSum','InterNatSlope',paste0('interNational',timeSteps))
 
-#save(cntry_balance, file = 'results/cntry_balance.R')
+#save(cntry_balance, file = '../results/cntry_balance.R')
 
 
 #### global ----
 
 # sum together separately the out and in 
-cntry_out <- cntry_netMigr %>% 
-  mutate_at(vars(contains('cntry_netMgr')), function(x) ifelse(x>0, 0, x)) %>% 
-  summarise_at(vars(contains('cntry_netMgr')),list(sum))
+# cntry_out <- cntry_netMigr %>% 
+#   mutate_at(vars(contains('cntry_netMgr')), function(x) ifelse(x>0, 0, x)) %>% 
+#   summarise_at(vars(contains('cntry_netMgr')),list(sum))
+# 
+# cntry_in <- cntry_netMigr %>% 
+#   mutate_at(vars(contains('cntry_netMgr')), function(x) ifelse(x<0, 0, x)) %>% 
+#   summarise_at(vars(contains('cntry_netMgr')),list(sum))
 
+cntry_out <- cntry_netMigr %>% 
+  mutate(across(contains('cntry_netMgr'), ~ ifelse(. > 0, 0, .))) %>% 
+  summarise(across(contains('cntry_netMgr'), sum, na.rm = TRUE))
+
+# Create a dataframe for "in" where negative values are set to 0
 cntry_in <- cntry_netMigr %>% 
-  mutate_at(vars(contains('cntry_netMgr')), function(x) ifelse(x<0, 0, x)) %>% 
-  summarise_at(vars(contains('cntry_netMgr')),list(sum))
+  mutate(across(contains('cntry_netMgr'), ~ ifelse(. < 0, 0, .))) %>% 
+  summarise(across(contains('cntry_netMgr'), sum, na.rm = TRUE))
 
 global_array <- array( c( as.matrix(abs(cntry_in)) , as.matrix(abs(cntry_out)) ) , 
                        dim = c( nrow(cntry_out), ncol(cntry_out), 2 ) )
@@ -685,7 +610,7 @@ global_Collect <- rbind( as.numeric( global_internatMigr) / 10^6,
 
 names(global_Collect) <- c( 'Scale', paste0('globalSum',as.character(timeSteps)) )
 
-write_csv(global_Collect,paste0('results/globalCollect',Sys.Date(),'.csv'))
+write_csv(global_Collect,paste0('../results/globalCollect.csv'))
 
 names(global_Collect) <- c( 'Scale', paste0(timeSteps) )
 
@@ -695,13 +620,13 @@ global_Collect_long <- global_Collect %>%
                values_to = 'mgrt') 
 
 
-library(ggplot2)
+
 p<-ggplot(global_Collect_long, aes(x=year, y=mgrt, group=Scale)) +
   geom_line(aes(color=Scale))+
   geom_point(aes(color=Scale))
 p
 
-ggsave(paste0('figures/fig1_migration_timeseries',Sys.Date(),'.pdf'),p,width = 140, height=120, unit='mm')
+ggsave(paste0('../figures/fig1_migration_timeseries.pdf'),p,width = 140, height=120, unit='mm')
 
 #### collect results ------
 
@@ -735,9 +660,9 @@ cntry_dataCollection <- sf_gadm_lev0 %>%
 
 # create sf files for country and subnational data
 
-v_gadm0 <- terra::as.polygons(rast('data_in/gadm_lev0_5arcmin.tif'))
+v_gadm0 <- terra::as.polygons(rast('../data_in_rast/gadm_lev0_5arcmin.tif'))
 
-#terra::writeVector(v_gadm0,"results/test_adm0.gpkg",overwrite=T)
+#terra::writeVector(v_gadm0,"../results/test_adm0.gpkg",overwrite=T)
 
 
 # remove repetition
@@ -751,20 +676,20 @@ sf_gadm_lev0_dataCollection <- sf::st_as_sf(v_gadm0) %>%
   ms_simplify(.,keep=0.1,keep_shapes = T) %>% 
   left_join(cntry_dataCollection_mod) %>% 
   # from percentage to per 1000 people
-  mutate_at(vars(contains('Sum')), function(x) 1000*x)
+  mutate(across(contains('Sum'), ~ 1000 * .))
 
 sf_gadm_lev0_dataNetMgr <- sf_gadm_lev0_dataCollection %>% 
   select(-c("InterNatMigrSum", "InterNatSlope" , "InterProvMigrSum", "InterProvSlope", 
             "IntraProvMigrSum" , "IntraProvSlope")) %>% 
   left_join(cntry_netMigrRel_mod) %>% 
-  mutate_at(vars(contains('nter')), function(x) 1000*x) %>% 
+  mutate(across(contains('nter'), ~ 1000 * .)) %>% 
   select(-Country) %>% 
   left_join(cntryID[,c(3,4)]) %>% 
   select(Country, everything())
   
 
 
-#write_sf(sf_gadm_lev0_dataNetMgr,"results/sf_gadm_lev0_dataNetMgr.gpkg",overwrite=T)
+#write_sf(sf_gadm_lev0_dataNetMgr,"../results/sf_gadm_lev0_dataNetMgr.gpkg",overwrite=T)
 
 v_gadm_lev0_dataNetMgr <- vect(sf_gadm_lev0_dataNetMgr)
 is.valid(v_gadm_lev0_dataNetMgr)
@@ -772,24 +697,21 @@ v_gadm_lev0_dataNetMgr_valid <- terra::makeValid(v_gadm_lev0_dataNetMgr)
 
 is.valid(v_gadm_lev0_dataNetMgr_valid)
 
-terra::writeVector(v_gadm_lev0_dataNetMgr_valid,"results/sf_gadm_lev0_dataNetMgr.gpkg",overwrite=T)
+terra::writeVector(v_gadm_lev0_dataNetMgr_valid,"../results/sf_gadm_lev0_dataNetMgr.gpkg",overwrite=T)
 
-test_adm0 <- vect("results/sf_gadm_lev0_dataNetMgr.gpkg") 
+test_adm0 <- vect("../results/sf_gadm_lev0_dataNetMgr.gpkg") 
 
-
-library(tidyterra)
-
-test_data <- sf_gadm_lev0_dataNetMgr %>% st_drop_geometry() %>% 
-  
-
-test_adm0 <- vect("results/test_adm0.gpkg") %>% 
-  left_join(sf_gadm_lev0_dataNetMgr %>% st_drop_geometry())
+test_data <- sf_gadm_lev0_dataNetMgr %>% st_drop_geometry()  
+# 
+# 
+# test_adm0 <- vect("../results/test_adm0.gpkg") %>% 
+#   left_join(sf_gadm_lev0_dataNetMgr %>% st_drop_geometry())
 
 
 
-v_gadm1 <- terra::as.polygons(rast('data_in/gadm_lev1_5arcmin.tif'))
+v_gadm1 <- terra::as.polygons(rast('../data_in_rast/gadm_lev1_5arcmin.tif'))
 
-gadm_lev1 <- st_read('data_in/gadm_lev1.gpkg') %>% 
+gadm_lev1 <- st_read('../data_in_gpkg/gadm_lev1.gpkg') %>% 
   st_drop_geometry() %>% 
   as_tibble() %>% 
   select(GID_1, NAME_1)
@@ -798,24 +720,25 @@ sf_gadm_lev1_dataCollection <- sf::st_as_sf(v_gadm1) %>%
   ms_simplify(.,keep=0.1,keep_shapes = T) %>% 
   left_join(subnat_dataCollection)%>% 
   # from percentage to per 1000 people
-  mutate_at(vars(contains('Sum')), function(x) 1000*x)
+  mutate(across(contains('Sum'), ~ 1000 * .))
 
 sf_gadm_lev1_dataNetMgr <- sf_gadm_lev1_dataCollection %>% 
   select(-c("IntraProvMigrSum", "IntraProvSlope" , "subnatNetMgrSum", "subnatNetMgrSlope")) %>% 
   left_join(subnat_netMigr_rel) %>% 
-  mutate_at(vars(contains('subnat')), function(x) 1000*x) %>%
+  mutate(across(contains('subnat'), ~ 1000 * .)) %>% 
+
   # add adm1 names
   left_join(gadm_lev1) %>% 
   select(nmbr, cntry_code, iso3,Country,GID_1, NAME_1, everything())
 
 
 
-terra::writeVector(vect(sf_gadm_lev1_dataNetMgr),"results/sf_gadm_lev1_dataNetMgr.gpkg",overwrite=T)
+terra::writeVector(vect(sf_gadm_lev1_dataNetMgr),"../results/sf_gadm_lev1_dataNetMgr.gpkg",overwrite=T)
 
 
-v_gadm2 <- terra::as.polygons(rast('data_in/gadm_lev2_5arcmin.tif'))
+v_gadm2 <- terra::as.polygons(rast('../data_in_rast/gadm_lev2_5arcmin.tif'))
 
-gadm_lev2 <- st_read('data_in/gadm_lev2.gpkg') %>% 
+gadm_lev2 <- st_read('../data_in_gpkg/gadm_lev2.gpkg') %>% 
   st_drop_geometry() %>% 
   as_tibble() %>% 
   select(GID_2, NAME_2) %>% 
@@ -826,64 +749,18 @@ sf_gadm_lev2_dataCollection <- sf::st_as_sf(v_gadm2) %>%
   ms_simplify(.,keep=0.1,keep_shapes = T) %>% 
   left_join(comm_dataCollection)%>% 
   # from percentage to per 1000 people
-  mutate_at(vars(contains('comm')), function(x) 1000*x) %>% 
+  mutate(across(contains('comm'), ~ 1000 * .)) %>% 
   left_join(gadm_lev2) %>% 
   select('Country', 'iso3', 'GID_1', 'GID_2', NAME_2, everything())
 
 
-terra::writeVector(vect(sf_gadm_lev2_dataCollection),"results/sf_gadm_lev2_dataNetMgr.gpkg",overwrite=T)
+terra::writeVector(vect(sf_gadm_lev2_dataCollection),"../results/sf_gadm_lev2_dataNetMgr.gpkg",overwrite=T)
 
 
 
-myPlot_sfAbs<-function(sf_in,column_in,breaks_in){
-  
-  pal <-  scico(9, begin = 0.1, end = 0.9,direction = -1, palette = "nuuk")
-  
-  plt_subnatMigr <- tm_shape(sf_in, projection = "+proj=robin") +
-    tm_fill(col = column_in,
-            palette = pal,
-            #contrast = c(0, 0.7),
-            breaks = breaks_in,
-            #lwd=0.0,
-            legend.is.portrait = FALSE)+
-    tm_shape(sf_gadm_lev0_dataCollection, projection = "+proj=robin") +
-    tm_borders(col = "black",
-               lwd = 0.1)+
-    tm_layout(#main.title = "Origin of data",
-      main.title.position = "center",
-      legend.outside = TRUE,
-      legend.outside.position = "bottom",
-      legend.text.size = .25,
-      legend.title.size = .75,
-      legend.width = 0.6,
-      frame = FALSE)
-}
+source('../functions/myPlot_sfAbs.R') 
 
-myPlot_sfNetMgr<-function(sf_in,column_in,breaks_in){
-  
-  pal <-  scico(9, begin = 0.1, end = 0.9,direction = -1, palette = "vik")
-  
-  plt_subnatMigr <- tm_shape(sf_in, projection = "+proj=robin") +
-    tm_fill(col = column_in,
-            palette = pal,
-            breaks = breaks_in,
-            midpoint = 0,
-            contrast = c(0, 0.7),
-            lwd=0,
-            legend.is.portrait = FALSE)+
-    tm_shape(sf_gadm_lev0_dataCollection, projection = "+proj=robin") +
-    tm_borders(col = "black",
-               lwd = 0.1)+
-    tm_layout(#main.title = "Origin of data",
-      main.title.position = "center",
-      legend.outside = TRUE,
-      legend.outside.position = "bottom",
-      legend.text.size =.25,
-      legend.title.size = .75,
-      legend.width = 0.6,
-      #legend.height = -10, 
-      frame = FALSE)
-}
+source('../functions/myPlot_sfNetMgr.R') 
 
 sumMgrRange <- seq(0,100,by=10)
 netMgrRange <- seq(-250,250,by=50)
@@ -917,7 +794,7 @@ p_cntryNetMgrSlope <- myPlot_sfNetMgr(sf_gadm_lev0_dataCollection,'InterNatSlope
 #                       p_cntryInterProv,p_cntryInterProvSlope,
 #                       ncol = 2)
 # 
-# tmap_save(p_col,filename = paste0('figures/mapsMigrations',Sys.Date(),'.pdf'),width = 180, height=200, units='mm')
+# tmap_save(p_col,filename = paste0('../figures/mapsMigrations.pdf'),width = 180, height=200, units='mm')
 # 
 
 p_fig1 <- tmap_arrange(p_commNetMgr, p_provInternal,
@@ -925,63 +802,5 @@ p_fig1 <- tmap_arrange(p_commNetMgr, p_provInternal,
                        p_cntryNetMgr,
                        ncol = 2)
 
-tmap_save(p_fig1,filename = paste0('figures/fig1_mapsMigrations',Sys.Date(),'.pdf'),width = 180, height=200, units='mm')
+tmap_save(p_fig1,filename = paste0('../figures/fig1_mapsMigrations.pdf'),width = 180, height=200, units='mm')
 
-##### national analysis at global scale----
-# 
-# 
-# # cntry net-migration
-# cntry_inMigr <- terra::zonal(r_inMigration,r_gadm_lev0_5arcmin, fun = sum, na.rm=T)
-# cntry_outMigr <- terra::zonal(r_outMigration,r_gadm_lev0_5arcmin, fun = sum, na.rm=T)
-# 
-# cntry_netMigr <- cbind(cntry_inMigr[,1],cntry_inMigr[,2:21] + cntry_outMigr[,2:21])
-# names(cntry_netMigr) <- c("fao_id",paste0('netMgr',2001:2020))
-# 
-# cntry_netMigr_out <- cntry_netMigr 
-# cntry_netMigr_out[cntry_netMigr_out > 0] <- 0
-# 
-# cntry_netMigr_in <- cntry_netMigr 
-# cntry_netMigr_in[cntry_netMigr_in < 0] <- 0
-# 
-# sf_gadm_lev0_data <- sf_gadm_lev0 %>% 
-#   left_join(cntry_netMigr)
-# 
-# st_write(sf_gadm_lev0_data,"results/cntry_netMigration_data.gpkg", delete_layer = TRUE)
-# 
-# 
-# cntry_summary <- colSums(cntry_netMigr_out[2:21]) %>% as_tibble()
-# cntry_summary[,2] <- as_tibble(colSums(cntry_netMigr_in[2:21]))
-# cntry_summary[,3] <- cntry_summary[,2] + cntry_summary[,1]
-# 
-# names(cntry_summary) <- c("cntry_outMgr","cntry_inMgr", "cntry_netMigr")
-# 
-# 
-# #### summary ----
-# 
-# all_summary <- bind_cols(grid_summary,subnat_summary,cntry_summary) %>% 
-#   
-#   mutate(year = 2001:2020) %>% 
-#   mutate(interNational_outMigr = cntry_outMgr / 10^6) %>% 
-#   mutate(interNational_inMigr = cntry_inMgr/ 10^6) %>% 
-#   mutate(interProvincial_outMigr = (subnat_outMgr - cntry_outMgr)/ 10^6) %>% 
-#   mutate(interProvincial_inMigr = (subnat_inMgr - cntry_inMgr)/ 10^6) %>% 
-#   mutate(intraProvincial_outMigr = (grid_outMgr - subnat_outMgr)/ 10^6) %>% 
-#   mutate(intraProvincial_inMigr = (grid_inMgr - subnat_inMgr)/ 10^6) %>% 
-#   mutate(total_outMigr = interNational_outMigr+interProvincial_outMigr+intraProvincial_outMigr) %>% 
-#   mutate(total_inMigr = interNational_inMigr+interProvincial_inMigr+intraProvincial_inMigr) %>% 
-#   select(c(year,
-#            interNational_outMigr,interNational_inMigr,
-#            interProvincial_outMigr,interProvincial_inMigr,
-#            intraProvincial_outMigr,intraProvincial_inMigr,
-#            total_outMigr,total_inMigr)) %>% 
-#   mutate(perc_interNational_outMigr = interNational_outMigr / total_outMigr)%>% 
-#   mutate(perc_interNational_inMigr = interNational_inMigr / total_outMigr)%>% 
-#   mutate(perc_interProvincial_outMigr = interProvincial_outMigr / total_outMigr)%>% 
-#   mutate(perc_interProvincial_inMigr = interProvincial_inMigr / total_outMigr)%>% 
-#   mutate(perc_intraProvincial_outMigr = intraProvincial_outMigr / total_outMigr)%>% 
-#   mutate(perc_intraProvincial_inMigr = intraProvincial_inMigr / total_outMigr) %>% 
-#   round(.,digits=2)
-# 
-# write_csv(all_summary,'results/global_summary_migration_inMillions.csv')
-# 
-# 

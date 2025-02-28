@@ -2,3 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
+results/
+data_in_rast/
+figures/
+data_in_downscaling/
+data_in_gpkg/
+data_in/
+data_out_downscaling/
+data_out/

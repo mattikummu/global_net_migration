@@ -8,8 +8,6 @@ library(magrittr)
 library(raster)
 library(terra)
 
-
-
 library(snow)
 library(foreach)
 library(openxlsx) #
@@ -27,12 +25,12 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 #### load general data -----
 
 
-cntryID <- read_csv("data_in/countries_codes_and_coordinates.csv") %>% 
+cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>% 
   dplyr::select(-cntry_code) %>% 
   #rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
   select(GADM_code,iso3)
 
-cntryUNmeta <- read.xlsx("data_in/country_id_meta.xlsx", sheet="cntry_id_FAO_UN") %>% 
+cntryUNmeta <- read.xlsx("../data_in/country_id_meta.xlsx", sheet="cntry_id_FAO_UN") %>% 
   mutate_at(vars(fao_id),as.character) %>% 
   select(-fao_id) %>% 
   as_tibble()
@@ -41,149 +39,38 @@ cntryUNmeta <- read.xlsx("data_in/country_id_meta.xlsx", sheet="cntry_id_FAO_UN"
 ###### National data 80+ population  -------------------------------
 
 
-# cntry_finalData_IDs <- read.xlsx("../sub_national_gdp/results/cntry_data_final.xlsx", skipEmptyRows = FALSE) %>%
-#   select(cntry_id,country_code)  %>%
-#   as_tibble()
+## load admin0 raster
 
+cntry_raster_5arcmin <- rast('../data_in_rast/GADM_level0_raster_5arcmin.tif')
 
-# polygon to raster - needs to be done only once. 
-# 
-# # load national gpkg
-# cntry_polyg <- read_sf('data_in/gadm_level0.gpkg') %>% 
-#   st_simplify(preserveTopology = T,dTolerance = .01)
-# 
-# # add id
-# cntry_polyg_withID <- cntry_polyg %>% 
-#   rename(iso3 = GID_0) %>% 
-#   mutate(iso3 = ifelse(iso3 == 'ALA','FIN',iso3)) %>%  # join Åland as a part of Finland
-#   mutate(NAME_0 = ifelse(NAME_0 == 'Åland','Finland',NAME_0)) %>% 
-#   left_join(cntryID) %>% 
-#   filter(!is.na(GADM_code))
-# 
-# # multipolygon to polygon, so that fasterize(()) would work
-# cntry_polyg_withID_cast <- st_cast(cntry_polyg_withID,"MULTIPOLYGON") %>% 
-#   st_cast("POLYGON")
-# 
-# # rasterise cntry borders
-# ref_raster <- raster(ncol=360*12*5, nrow=180*12*5)
-# 
-# cntry_raster_1arcmin <- fasterize(cntry_polyg_withID_cast,ref_raster,field="GADM_code")
-# 
-# # aggregate to 5 arc-min
-# cntry_raster_5arcmin <- terra::aggregate(rast(cntry_raster_1arcmin),fact=5,fun=modal, na.rm = T)
-# 
-# writeRaster(cntry_raster_5arcmin,'data_in/GADM_level0_raster_5arcmin.tif',gdal="COMPRESS=LZW", overwrite=TRUE)
-
-
-
-# load raster
-cntry_raster_5arcmin <- rast('data_in/GADM_level0_raster_5arcmin.tif')
 
 
 ###### National data 80+ population 
 
 # create function
+source('../functions/myFun_avgAge80plus.R')
 
-myFun_avgAge80plus <-function(xlsWithPopByAge){
-  
-  popByAgeFemale <- read.xlsx(xlsWithPopByAge,"ESTIMATES", colNames = T) %>%
-    # unselect non-wanted columns
-    select(-c(Index, Variant,Notes,`0-4`,`5-9`,`10-14`,`15-19`,`20-24`, `25-29`, `30-34`, `35-39`, 
-              `40-44`, `45-49`, `50-54`, `55-59`, `60-64`, `65-69`, `70-74`, `75-79`)) %>%
-    # rename columns
-    rename(age80 = `80-84`,age85 = `85-89`,age90 = `90-94`,age95 = `95-99`,age100 = `100+` ) %>% 
-    # calculate population weighted age for each age group
-    mutate(ageWeightedPop80_100 = 82.5 * as.numeric(age80)  + 87.5 * as.numeric(age85) + 92.5 * as.numeric(age90) + 97.5*as.numeric( age95) + 102.5 * as.numeric(age100)) %>% 
-    # calculate total pop for age 80+
-    mutate(totalPop80_100 = as.numeric(age80)  + as.numeric(age85) + as.numeric(age90) + as.numeric( age95) + as.numeric(age100)) %>% 
-    # calculate average age for age 80+
-    mutate(avgAge80_100 = ageWeightedPop80_100/totalPop80_100) %>% 
-    #unselect non-wanted columns
-    select(-c(age80, age85, age90, age95, age100, ageWeightedPop80_100, totalPop80_100)) %>% 
-    as_tibble() %>%
-    # select only country data or world data
-    filter(Type == 'Country/Area' | Type == 'World' )
-  
-  popByAgeFemaleWorld_wide <- popByAgeFemale %>% 
-    pivot_wider(names_from = "Year", values_from = 'avgAge80_100') %>% 
-    # add iso3 code
-    left_join(.,cntryUNmeta,by=c('cntry_id' = 'UN_id')) %>% 
-    mutate(Type = ifelse(is.na(Type), 'Country/Area',Type)) %>% 
-    mutate(iso3 = ifelse(Type == 'World', 'WWW', iso3)) %>% 
-    filter(Type == 'World') %>% 
-    select(c(Region, cntry_id, iso3,Type,'2000','2005','2010','2015','2020')) 
-  
-  popByAgeFemale_wide <- popByAgeFemale %>% 
-    pivot_wider(names_from = "Year", values_from = 'avgAge80_100') %>% 
-    # add iso3 code
-    right_join(.,cntryUNmeta,by=c('cntry_id' = 'UN_id')) %>% 
-    mutate(Type = ifelse(is.na(Type), 'Country/Area',Type)) %>% 
-    mutate(iso3 = ifelse(Type == 'World', 'WWW', iso3)) %>% 
-    # filter out the countries where no iso3 is available
-    filter(!is.na(iso3)) %>% 
-    select(c(Region, cntry_id, iso3,Type,'2000','2005','2010','2015','2020')) %>%
-    # add GADM id
-    right_join(.,cntryID)
-  
-  
-  # use world average for countries where no data available
-  popByAgeFemale_wide_NA <- popByAgeFemale_wide %>% 
-    filter(is.na(Region)) 
-  
-  popByAgeFemale_wide_NA[,5:9] = popByAgeFemaleWorld_wide[,5:9]
-  
-  popByAgeFemale_wide_filled <- popByAgeFemale_wide %>% 
-    filter(!is.na(Region)) %>% 
-    rbind(.,popByAgeFemale_wide_NA) 
-  
-  
-  #### put to map 
-  
-  # unique ids
-  temp_id = as.data.frame( unique(cntry_raster_5arcmin))
-  # initialise data
-  rAvgAgeOver80 <- cntry_raster_5arcmin
-  
-  # go through each timestep (2000,2005, ..., 2020)
-  for (i in 1:5) {
-    
-    temp_v = as.data.frame(popByAgeFemale_wide_filled[,c(10,i+4)]) # select id and value to which this is replaced
-    temp_replace <- temp_id %>% 
-      rename(GADM_code = layer) %>% 
-      left_join(temp_v) # join id in the raster and the value it should be replaced with
-    
-    # reclassify raster
-    temp_raster <- classify(cntry_raster_5arcmin,
-                            temp_replace)
-    # store to stack
-    rAvgAgeOver80 <- c(rAvgAgeOver80,temp_raster)
-  }
-  # select only the parts of stack where data is given
-  rAvgAgeOver80 <- subset(rAvgAgeOver80,2:6)
-  return(rAvgAgeOver80)
-}
-
-
-rAvgAgeOver80_female <- myFun_avgAge80plus("data_in/WPP2019_POP_F07_3_POPULATION_BY_AGE_FEMALE.xlsx")
-rAvgAgeOver80_male <- myFun_avgAge80plus("data_in/WPP2019_POP_F07_2_POPULATION_BY_AGE_MALE.xlsx")
+rAvgAgeOver80_female <- myFun_avgAge80plus("../data_in/WPP2019_POP_F07_3_POPULATION_BY_AGE_FEMALE.xlsx")
+rAvgAgeOver80_male <- myFun_avgAge80plus("../data_in/WPP2019_POP_F07_2_POPULATION_BY_AGE_MALE.xlsx")
 
 names(rAvgAgeOver80_female) <- c('yr2000','yr2005','yr2010','yr2015','yr2020')
 names(rAvgAgeOver80_male) <- c('yr2000','yr2005','yr2010','yr2015','yr2020')
 
-writeRaster(rAvgAgeOver80_female,'results/rAvgAgeOver80_female.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
-writeRaster(rAvgAgeOver80_male,'results/rAvgAgeOver80_male.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(rAvgAgeOver80_female,'../results/rAvgAgeOver80_female.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(rAvgAgeOver80_male,'../results/rAvgAgeOver80_male.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 
 
-#### Prepare explanatory variables to downscaling ----
+#### gridded population structure ----
 
 
-# read total population for 2000-2020
-ref_rast <- rast('/Users/mkummu/Aalto University/WDRG - Datasets/WorldPop_5arcmin_2000_2020/age_structures_2000_5arcmin.tif')
+# ref raster
+ref_rast <- rast('../data_in_rast/age_structure/age_structures_2000_5arcmin.tif')
 
 # country specific raster data for age 80+
-rAvgAgeOver80_female <- rast('results/rAvgAgeOver80_female.tif')
-rAvgAgeOver80_male <- rast('results/rAvgAgeOver80_male.tif')
+rAvgAgeOver80_female <- rast('../results/rAvgAgeOver80_female.tif')
+rAvgAgeOver80_male <- rast('../results/rAvgAgeOver80_male.tif')
 
+plot(subset(rAvgAgeOver80_female,3))
 
 ### for years 2000, 2005 ... 2020
 
@@ -194,7 +81,7 @@ iYear = 2000
 for (iYear in seq(2000,2020,by=5)) {
   
   # age structure
-  filePath <- paste0('/Users/mkummu/Aalto University/WDRG - Datasets/WorldPop_5arcmin_2000_2020/age_structures_',iYear,'_5arcmin.tif')
+  filePath <- paste0('../data_in_rast/age_structure/age_structures_',iYear,'_5arcmin.tif')
   ageStruct_iYear <- rast(filePath)
   
   # project to match with other raster data
@@ -239,57 +126,32 @@ for (iYear in seq(2000,2020,by=5)) {
 
 avgAgeColl_sub <- subset(avgAgeColl,2:6)
 names(avgAgeColl_sub) <- c('avgAge2000','avgAge2005','avgAge2010','avgAge2015','avgAge2020')
-writeRaster(avgAgeColl_sub ,'results/avgAge2000_2020_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(avgAgeColl_sub ,'../results/avgAge2000_2020_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 
 fertShrColl_sub <- subset(fertShrColl,2:6)
 names(fertShrColl_sub) <- c('avgAge2000','avgAge2005','avgAge2010','avgAge2015','avgAge2020')
-writeRaster(fertShrColl_sub ,'results/fertileFemaleShr2000_2020_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(fertShrColl_sub ,'../results/fertileFemaleShr2000_2020_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 
-plot(avgAgeColl[[6]])
+plot(avgAgeColl_sub[[5]])
 # fill NA values
 
 
 #### Ratio between average age and life expectance ----
 
 
-lifeExp <- rast('data_in/hdiComponent_lifexpUpd.tif')
+lifeExp <- rast('../data_in_downscaling/hdiComponent_lifexpUpd.tif')
 # select 2000-2019 and use 2019 to year 2020 too
 lifeExp_sel <- lifeExp[[c(11:nlyr(lifeExp),nlyr(lifeExp))]]
 
 # interpolate avgAge between the years (2000,2005,...,2020)
-avgAge <- rast('results/avgAge2000_2020_v2.tif')
+avgAge <- rast('../results/avgAge2000_2020_v2.tif')
 
 # define function for interpolation
-interpRaster <- function(r_in,existingYears,newYears) {
-  # r_in <- stack(avgAge)
-  # existingYears <- seq(2000,2020,5)
-  # nClusters <- 6
-  
-  # NA to zero
-  r_in[is.na(r_in)] <- 0
-  
-  # int_sN <- 1
-  # int_eN <- existingYears[length(existingYears)] - existingYears[1] + 1
-  
-  #newYears <- existingYears[1]:existingYears[length(existingYears)]
-  
-  rasInterp <- things::interpolate_linear(stack(r_in),existingYears,newYears,tempdir(), 
-                                          'example', return_stack=TRUE,overwrite=TRUE)
-  
-  # f3 <- function(y) approx(existingYears, y, int_sN:int_eN, rule=2)$y
-  # 
-  # beginCluster(nClusters)
-  # rasInterp <- clusterR(r_in, calc, args=list(fun=f3))
-  # endCluster()
-  
-  names(rasInterp) <- paste0('Year',existingYears[1]:existingYears[length(existingYears)]) 
-  
-  return(rasInterp)
-}
+source('../functions/f_interp_missingYears.R') 
 
 # library(whitebox)
 # 
-# ref_raster_5arcmin <- raster(ncol=360*12, nrow=180*12)
+ref_rast <- rast(ncol=360*12, nrow=180*12)
 # whitebox::wbt_euclidean_allocation(stack(subset(avgAge,1)),ref_raster_5arcmin)
 
 fillmode <- function(v, na.rm) {  
@@ -304,9 +166,9 @@ fillmode <- function(v, na.rm) {
   
 }
 
-if (file.exists('results/AvgAge_v2_interp.tif')){
+if (file.exists('../results/AvgAge_v2_interp.tif')){
   # load it
-  avgAge_interp_proj <- rast('results/AvgAge_v2_interp.tif')
+  avgAge_interp_proj <- rast('../results/AvgAge_v2_interp.tif')
 } else { 
   # create it
   
@@ -320,12 +182,18 @@ if (file.exists('results/AvgAge_v2_interp.tif')){
   #avgAge_buffer <- focal(avgAge, w = 3, fun = fillmode, na.rm = FALSE)
   
   # run funtion
-  writeRaster(avgAge_buffer_sub ,'results/AvgAge_v2_buffer.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+  writeRaster(avgAge_buffer_sub ,'../results/AvgAge_v2_buffer.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
   
-  avgAge_interp <- interpRaster(stack(avgAge_buffer_sub),seq(2000,2020,5),seq(2000,2020,1))
+  
+  
+  avgAge_interp <- f_interp_missingYears(avgAge_buffer_sub, nameInd = 'avgAge')  
+  
+  #avgAge_interp <- f_interpRaster(stack(avgAge_buffer_sub),seq(2000,2020,5),seq(2000,2020,1))
   
   # project avgAge to same extent than lifeExp
-  avgAge_interp_buff_proj <- terra::project(rast(avgAge_interp),subset(lifeExp,1))
+  avgAge_interp_buff_proj <- terra::extend(avgAge_interp,subset(lifeExp,1))
+  
+  ext(avgAge_interp_buff_proj) <- ext(subset(lifeExp,1))
   
   # apply coastal mask of lifeExp
   
@@ -343,31 +211,10 @@ if (file.exists('results/AvgAge_v2_interp.tif')){
   
   
   names(avgAge_interp_proj) <- paste0('avgAge',paste0(2000:2020)) 
-  writeRaster(avgAge_interp_proj ,'results/AvgAge_v2_interp.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+  writeRaster(avgAge_interp_proj ,'../results/AvgAge_v2_interp.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 }
 
 # buffer to lifeExp_sel to take care of slightly different land mask of the data
-
-#Define how many cores you want to use
-# UseCores <- detectCores() -1
-# #Register CoreCluster
-# cl <- makeCluster(UseCores)
-# registerDoParallel(cl)
-# 
-# rTemp <- brick(lifeExp_sel)
-# 
-# Density_Function_1000 <- function (raster_layer){
-#   
-#   focal(raster_layer, w = 3, fun = fillmode, na.rm = FALSE)
-# }
-# 
-# 
-# tempLifeExp<- foreach(i = 1:nlyr(rTemp),
-#                      .packages="terra",
-#                      .combine = 'c') %dopar% {
-#                        focal(subset(rTemp,i), w = 3, fun = fillmode, na.rm = FALSE)
-#                      }
-# 
 
 
 lifeExp_sel_buff <- subset(lifeExp_sel,1)
@@ -386,13 +233,16 @@ mask_sea <- is.nan(temp_rast_proj)
 # store masked lifeExp
 lifeExp_sel_masked <- lifeExp_sel_buff
 lifeExp_sel_masked[mask_sea == 1] <- NA
-writeRaster(lifeExp_sel_masked ,'results/lifeExp_sel_masked.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(lifeExp_sel_masked ,'../results/lifeExp_sel_masked.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 
-avgAge_interp_buff <- rast('results/AvgAge_v2_buffer.tif')
-avgAge_interp <- interpRaster(stack(avgAge_interp_buff),seq(2000,2020,5),seq(2000,2020,1))
+avgAge_interp_buff <- rast('../results/AvgAge_v2_buffer.tif')
+
+avgAge_interp <- f_interp_missingYears(avgAge_interp_buff, nameInd = 'avgAge')  
 
 # project avgAge to same extent than lifeExp
-avgAge_interp_buff_proj <- terra::project(rast(avgAge_interp),subset(lifeExp,1))
+avgAge_interp_buff_proj <- terra::extend(avgAge_interp,subset(lifeExp,1))
+
+ext(avgAge_interp_buff_proj) <- ext(subset(lifeExp,1))
 
 
 # store masked ratio
@@ -403,7 +253,8 @@ ratioAvgAge_lifeExp[mask_sea == 1] <- NA
 #ratioAvgAge_lifeExp[ratioAvgAge_lifeExp == 0] = NA
 ratioAvgAge_lifeExp[ratioAvgAge_lifeExp < 0.02] = NA # some very small values, due to different landmask of the files
 names(ratioAvgAge_lifeExp) <- paste0('ratio',paste0(2000:2020)) 
-writeRaster(ratioAvgAge_lifeExp ,'results/ratioAvgAge_lifeExp_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(ratioAvgAge_lifeExp ,'../data_in_downscaling/ratioAvgAge_lifeExp_v2.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+
 
 
 # interpolate fertile women share data ------------------------------------
@@ -411,19 +262,19 @@ writeRaster(ratioAvgAge_lifeExp ,'results/ratioAvgAge_lifeExp_v2.tif', gdal="COM
 # define function for interpolation
 
 # load data
-fertileFemShr <- rast('results/fertileFemaleShr2000_2020_v2.tif')
+fertileFemShr <- rast('../results/fertileFemaleShr2000_2020_v2.tif')
 
 # interpolate
 # run funtionc
-fertileFemShr_interp <- interpRaster(stack(fertileFemShr),seq(2000,2020,5),seq(2000,2020,1))
+fertileFemShr_interp <- f_interp_missingYears(fertileFemShr,'fertileFemShr')
 
-r_fertileFemShr_interp <- rast(fertileFemShr_interp)
+r_fertileFemShr_interp <- fertileFemShr_interp
 
 r_fertileFemShr_interp[r_fertileFemShr_interp == 0] = NA
 names(r_fertileFemShr_interp) <- paste0('ratio',paste0(2000:2020)) 
 
 
-rastRef = rast(paste0('results/','ratioAvgAge_lifeExp_v2','.tif')) %>% 
+rastRef = rast(paste0('../results/','ratioAvgAge_lifeExp_v2','.tif')) %>% 
   subset(.,terra::nlyr(.))
 
 rastProj = r_fertileFemShr_interp %>% 
@@ -452,8 +303,9 @@ r_fertileFemShr_masked[mask_sea == 1] <- NA
 
 
 #r_fertileFemShr_interp[r_fertileFemShr_interp < 0.02] = NA # some very small values, due to different landmask of the files
-writeRaster(r_fertileFemShr_masked ,'results/fertileFemaleShr2000_2020_v2_interp.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
+writeRaster(r_fertileFemShr_masked ,'../data_in_downscaling/fertileFemaleShr2000_2020_v2_interp.tif', gdal="COMPRESS=LZW",overwrite=TRUE)
 
+#plot(subset(r_fertileFemShr_masked,5))
 
 ### plot ####
 
@@ -464,14 +316,14 @@ library(viridis)
 
 
 # load raster
-ratioAvgAge_lifeExp <- rast('results/ratioAvgAge_lifeExp_v2.tif')
+ratioAvgAge_lifeExp <- rast('../results/ratioAvgAge_lifeExp_v2.tif')
 
-fertShrColl <- rast('results/fertileFemaleShr2000_2020_v2.tif')
+fertShrColl <- rast('../results/fertileFemaleShr2000_2020_v2_interp.tif')
 
 
 ratioAvgAge_lifeExp_robin <- 1 - terra::project(subset(ratioAvgAge_lifeExp,21), "+proj=robin",
                                                 mask = TRUE)
-fertShrColl_robin <- terra::project(subset(fertShrColl,5), "+proj=robin",
+fertShrColl_robin <- terra::project(subset(fertShrColl,21), "+proj=robin",
                                     mask = TRUE)
 
 # load land boundary
@@ -492,39 +344,31 @@ colPalette <- viridis(n=20,begin = 0.25, end = 1,direction=1, option="magma")
 
 
 # mapping function
-raster2map_v2 <- function(r_in,shape_in, colPalette, plotTitle) {
-  
-  
-  tmapMap <- tm_shape(r_in) +
-    tm_raster(palette = colPalette,
-              #breaks = fishing.breaks,
-              title = plotTitle,
-              n = 15,
-              style = "fisher",
-              colorNA = "white",
-              legend.is.portrait = FALSE) +
-    tm_shape(shape_in,projection = "robin") +
-    tm_borders(col="grey50",lwd = 0.1)+
-    tm_layout(legend.bg.color = TRUE,
-              legend.outside.position = "bottom",
-              legend.outside = TRUE,
-              frame = FALSE)
-  
-  
-  return(tmapMap)
-}
+source('../functions/f_raster2map_v2.R')
 
 
+map_ratioAvgAge_lifeExp <- f_raster2map_v2(ratioAvgAge_lifeExp_robin,cntry50,colPalette,"percentage of life left")
 
-map_ratioAvgAge_lifeExp <- raster2map_v2(ratioAvgAge_lifeExp_robin,cntry50,colPalette,"percentage of life left")
-
-map_fertShrColl <- raster2map_v2(fertShrColl_robin,cntry50,colPalette,"percentage of fertile women")
+map_fertShrColl <- f_raster2map_v2(fertShrColl_robin,cntry50,colPalette,"percentage of fertile women")
 
 
 # collect maps
 map_popIndicators <- tmap_arrange( map_ratioAvgAge_lifeExp,map_fertShrColl,
                                    widths = c(.5, .5))
 
+
+# Define the folder name
+folder_name <- "../figures"
+
+# Check if the folder exists
+if (!dir.exists(folder_name)) {
+  # Create the folder if it doesn't exist
+  dir.create(folder_name)
+  message("Folder '", folder_name, "' created.")
+} else {
+  message("Folder '", folder_name, "' already exists.")
+}
+
 # save map
-tmap_save(map_popIndicators, "figures/map_popIndicators_2020.pdf", width=180, height=200, units="mm")
+tmap_save(map_popIndicators, "../figures/map_popIndicators_2020.pdf", width=180, height=200, units="mm")
 

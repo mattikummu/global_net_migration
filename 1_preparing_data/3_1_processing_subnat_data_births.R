@@ -17,20 +17,20 @@ setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
 #### load data -----
 
-cntryID <- read_csv("data_in/countries_codes_and_coordinates.csv") %>% 
+cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>% 
   dplyr::select(-cntry_code) %>% 
   rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
   select(cntry_code,iso2,iso3,Country) %>% 
   mutate(iso2 = ifelse(Country == 'Namibia','NB',iso2))
 
-cntry_metaData_births <- read.xlsx("data_in/cntry_metaData.xlsx",sheet = 'cntry_meta_births') %>% 
+cntry_metaData_births <- read.xlsx("../data_in/cntry_metaData.xlsx",sheet = 'cntry_meta_births') %>% 
   as_tibble()
 
-cntry_metaData_deaths <- read.xlsx("data_in/cntry_metaData.xlsx",sheet = 'cntry_meta_deaths') %>% 
+cntry_metaData_deaths <- read.xlsx("../data_in/cntry_metaData.xlsx",sheet = 'cntry_meta_deaths') %>% 
   as_tibble()
-
-popHyde_1990_2020 <- rast("data_in/pop_1990_2020_hyde32.tif")
-popWorldPop_2000_2020 <- rast("data_in/ppp_2000_2020_5arcmin_corrected_fixed.tif")
+# 
+# popHyde_1990_2020 <- rast("../data_in/pop_1990_2020_hyde32.tif")
+# popWorldPop_2000_2020 <- rast("../data_in/ppp_2000_2020_5arcmin_corrected_fixed.tif")
 
 
 #### births ----
@@ -60,11 +60,12 @@ temp_NumRat <- NumRat %>%
 
 # read data
 
-subnat_data <- read.xlsx('data_in/STATdata_2_wide_mk_v2.xlsx') %>% 
+subnat_data <- read.xlsx('../data_in/STATdata_2_wide_mk_v2.xlsx') %>% 
   as_tibble() %>% 
   rename(iso2 = ISO) %>% 
   rename(Subnat = Region) %>% 
   mutate(iso2 = ifelse(Country == 'Namibia','NB',iso2)) %>% 
+  #filter(!is.na(RegID)) %>% 
   left_join(cntryID,by='iso2') %>% 
   dplyr::filter(iso3 %in% cntryList$GID_0) %>% 
   arrange(iso3) %>% 
@@ -74,7 +75,7 @@ names(subnat_data) <- c('RegID',as.character(1990:2019),'iso3')
 
 id_subnat <- unique(subnat_data$iso3)
 
-gis_data <- read_sf( 'data_in/STATcompiler_areas.gpkg' ) %>% 
+gis_data <- read_sf( '../data_in_gpkg/STATcompiler_areas.gpkg' ) %>% 
   #st_drop_geometry() %>% 
   select(ISO,CNTRYNAMEE,DHSREGEN,REG_ID) %>% 
   rename(iso2 = ISO) %>% 
@@ -120,7 +121,7 @@ temp_NumRat <- NumRat %>%
 
 # read data 
 
-subnat_data <- read.xlsx('data_in/birth_rate_v3.xlsx', sheet='birth_rate', startRow = 8) %>% 
+subnat_data <- read.xlsx('../data_in/birth_rate_v3.xlsx', sheet='birth_rate', startRow = 8) %>% 
   as_tibble() %>% 
   rename(iso3=GID_0) %>% 
   select(-GID_1) %>% 
@@ -137,7 +138,7 @@ subnat_data[cols.num] <- sapply(subnat_data[cols.num],as.numeric)
 
 id_subnat <- unique(subnat_data$iso3)
 
-gis_data <- read_sf( 'data_in/gadm_lev1.gpkg' ) %>% 
+gis_data <- read_sf( '../data_in_gpkg/gadm_lev1.gpkg' ) %>% 
   #st_drop_geometry() %>% 
   select(GID_0,NAME_0,NAME_1,GID_1) %>% 
   rename(iso3 = GID_0) %>% 
@@ -173,7 +174,7 @@ temp_addedNUTS <- tibble(
   NUTS0 = c("GB","GB","DE")
 ) 
 
-eurostat_cntry_NUTS2 <- read_sf('data_in/nuts2_corGeom.gpkg') %>% 
+eurostat_cntry_NUTS2 <- read_sf('../data_in_gpkg/nuts2_corGeom.gpkg') %>% 
   select(NUTS,NUTS0) %>% 
   st_drop_geometry() %>% 
   bind_rows(temp_addedNUTS)
@@ -185,7 +186,7 @@ cntryList <- cntry_metaData_births %>%
   mutate(NUMBER_RATE = "R") # already modified to ratio in previous code
 
 # done in a separate script (preparing_data.R)
-temp_eurostat_gis <- read_sf("results/eurostat_poly_birth_data.gpkg") 
+temp_eurostat_gis <- read_sf("../results/eurostat_poly_birth_data.gpkg") 
 #st_is_valid(temp_eurostat_gis)
 
 names(temp_eurostat_gis) <- as.character(c("GID_1","Subnat",as.character(2000:2019),"geom"))
@@ -223,7 +224,7 @@ temp_NumRat <- NumRat %>%
 
 # read data
 
-subnat_data <- read.xlsx('data_in/birth_rate_v3.xlsx', sheet='birth_rate', startRow = 8) %>% 
+subnat_data <- read.xlsx('../data_in/birth_rate_v3.xlsx', sheet='birth_rate', startRow = 8) %>% 
   as_tibble() %>% 
   rename(iso3=GID_0) %>% 
   #select(-GID_1)  %>% 
@@ -237,7 +238,7 @@ subnat_data <- read.xlsx('data_in/birth_rate_v3.xlsx', sheet='birth_rate', start
 cols.num <- c(as.character(1990:2019))
 subnat_data[cols.num] <- sapply(subnat_data[cols.num],as.numeric)
 
-temp_gis_JAM <- read_sf( 'data_in/GIS extra/Jamaica_mod.gpkg') %>% 
+temp_gis_JAM <- read_sf( '../data_in_gpkg/GIS extra/Jamaica_mod.gpkg') %>% 
   select(ISO,NAME_0,NAME_1) %>% 
   rename(iso3 = ISO) %>% 
   rename(Subnat = NAME_1) %>% 
@@ -248,7 +249,7 @@ temp_gis_JAM <- read_sf( 'data_in/GIS extra/Jamaica_mod.gpkg') %>%
   left_join(cntryID,by='iso3') %>% 
   select(Country,Subnat,iso3,cntry_code,GID_1)
 
-temp_gis_LBN <- read_sf( 'data_in/GIS extra/Lebanon.gpkg') %>% 
+temp_gis_LBN <- read_sf( '../data_in_gpkg/GIS extra/Lebanon.gpkg') %>% 
   select(GID_0,NAME_0,NAME_1,GID_1) %>% 
   rename(iso3 = GID_0) %>% 
   rename(Subnat = NAME_1) %>% 
@@ -261,7 +262,7 @@ temp_gis_LBN <- read_sf( 'data_in/GIS extra/Lebanon.gpkg') %>%
 
 names(temp_gis_LBN) <- c("Country","Subnat","iso3","cntry_code", "GID_1","geom" )
 
-temp_gis_MAR <- read_sf( 'data_in/GIS extra/Morocco_mod.gpkg') %>% 
+temp_gis_MAR <- read_sf( '../data_in_gpkg/GIS extra/Morocco_mod.gpkg') %>% 
   select(ISO,NAME_0,NAME_1,admID) %>% 
   rename(iso3 = ISO) %>% 
   rename(Subnat = NAME_1) %>% 
@@ -270,7 +271,7 @@ temp_gis_MAR <- read_sf( 'data_in/GIS extra/Morocco_mod.gpkg') %>%
   left_join(cntryID,by='iso3') %>% 
   select(Country,Subnat,iso3,cntry_code,GID_1)
 
-temp_gis_PRK <- read_sf( 'data_in/GIS extra/NorthKorea.gpkg') %>% 
+temp_gis_PRK <- read_sf( '../data_in_gpkg/GIS extra/NorthKorea.gpkg') %>% 
   select(GID_0,NAME_0,NAME_1,GID_1) %>% 
   rename(iso3 = GID_0) %>% 
   rename(Subnat = NAME_1) %>%  
@@ -280,7 +281,7 @@ temp_gis_PRK <- read_sf( 'data_in/GIS extra/NorthKorea.gpkg') %>%
 
 
 
-temp_gis_SLE <- read_sf( 'data_in/GIS extra/SierraLeone.gpkg') %>% 
+temp_gis_SLE <- read_sf( '../data_in_gpkg/GIS extra/SierraLeone.gpkg') %>% 
   select(admin2Pcod,admin2Name) %>% 
   mutate(iso3 = 'SLE') %>% 
   rename(Subnat = admin2Name) %>% 
@@ -332,14 +333,14 @@ subnat_gis_combined <- bind_rows(subnat_gis_data_EUROSTAT,
                                  subnat_gis_data_STATcomp) %>% 
   select(Country,iso3,cntry_code,Subnat,GID_1,GID_nmbr,NumRate,as.character(1990:2019))
 
-st_write(subnat_gis_combined, "results/test_births_combined.gpkg",delete_dsn = TRUE)
+st_write(subnat_gis_combined, "../results/test_births_combined.gpkg",delete_dsn = TRUE)
 
 temp <- subnat_gis_combined %>% 
   st_drop_geometry() %>%
   arrange(cntry_code,Subnat)
 
 
-write_csv(temp, "results/births_subnat_combined_v2.csv")
+write_csv(temp, "../results/births_subnat_combined_v2.csv")
 
 
 
@@ -348,31 +349,13 @@ write_csv(temp, "results/births_subnat_combined_v2.csv")
 
 #tmap::qtm(subnat_gis_data_STATcomp@geom )
 
-subnat_gis_combined <- read_sf( "results/test_births_combined.gpkg" )
+subnat_gis_combined <- read_sf( "../results/test_births_combined.gpkg" )
 
 names(subnat_gis_combined) <- c("Country", "iso3","cntry_code","Subnat","GID_1","GID_nmbr","NumRate",paste0("ratio",1990:2019),"geom")
 
-# # use HYDE to extrapolate WorldPop to 1990-2000
-# 
-# # project to same extent
-# # use HYDE to extrapolate WorldPop to 1990-2000
-# 
-# # project to same extent
-# popHyde_1990_2020_proj <- terra::project(popHyde_1990_2020,subset(popWorldPop_2000_2020,1))
-# 
-# deltaPop <- subset(popWorldPop_2000_2020,1) / subset(popHyde_1990_2020_proj,11)
-# 
-# # in case of zero population in popHyde, keep delta as 1 (i.e. no change)
-# deltaPop[is.infinite(deltaPop)] <- 1
-# 
-# popWorldPop_1990_2020 <- c(deltaPop * subset(popHyde_1990_2020_proj,1:10), popWorldPop_2000_2020)
-# 
-# # global(subset(popWorldPop_1990_2020,5),"sum", na.rm=TRUE)
-# # global(subset(popHyde_1990_2020_proj,5) ,"sum", na.rm=TRUE)
-# 
-# writeRaster(popWorldPop_1990_2020,'results/popRaster_1990_2020.tif',  gdal="COMPRESS=LZW",overwrite=TRUE)
 
-popWorldPop_1990_2020 <- rast('results/popRaster_1990_2020.tif')
+
+popWorldPop_1990_2020 <- rast('../results/popRaster_1990_2020.tif')
 
 # get pop for each subnat area
 temp_subnat_pop <- terra::extract(popWorldPop_1990_2020,vect(subnat_gis_combined),'sum',na.rm=T) %>%
@@ -390,58 +373,7 @@ subnat_pop <- subnat_gis_combined %>%
   select(GID_1,everything()) 
 
 
-# correct the few subnat populations
-# MYS.5_1 scale 1990-2012 with post-2012
-# GRL.3_1 scale 1990-2012 with post-2012
-# KWT.4_1 scale 1990-2012 with post-2012
-# Mali and Algeria, scaling ratio based on census values for years 2008 and 2009
-
-
-
-# temp_subnat_pop_ratio <- subnat_pop %>% 
-#   filter(GID_1 %in% c('MYS.5_1','GRL.3_1','KWT.4_1')) %>% 
-#   mutate(across(pop1990:pop2012, ~.x * pop2013/pop2012))
-# 
-# temp_mali_pop_ratio <- read.xlsx("data_in/mali_pop_ratio.xlsx") %>% 
-#   as_tibble() %>% 
-#   rename(GID_1 = GADM.code) %>% 
-#   arrange(GID_1) %>% 
-#   select(GID_1, ratio)
-# 
-# temp_subnat_pop_ratio_Mali <- subnat_pop %>% 
-#   filter(str_detect(GID_1, "^MLI")) %>% 
-#   arrange(GID_1) %>% 
-#   left_join(temp_mali_pop_ratio) %>% 
-#   mutate(across(pop1990:pop2020, ~.x * ratio)) %>% 
-#   select(-ratio)
-# 
-# temp_algeria_pop_ratio <- read.xlsx("data_in/algeria_pop_ratio.xlsx") %>% 
-#   as_tibble() %>% 
-#   rename(GID_1 = GADM.code) %>% 
-#   arrange(GID_1) %>% 
-#   select(GID_1, ratio)
-# 
-# temp_subnat_pop_ratio_Algeria <- subnat_pop %>% 
-#   filter(str_detect(GID_1, "^DZA")) %>% 
-#   arrange(GID_1) %>% 
-#   left_join(temp_algeria_pop_ratio) %>% 
-#   mutate(across(pop1990:pop2020, ~.x * ratio)) %>% 
-#   select(-ratio)
-
-# 
-# subnat_pop_fixed <- subnat_pop %>% 
-#   # remove the rows that were altered
-#   filter(!GID_1 %in% c('MYS.5_1','GRL.3_1','KWT.4_1')) %>% 
-#   filter(!str_detect(GID_1, "^MLI")) %>% 
-#   filter(!str_detect(GID_1, "^DZA")) %>% 
-#   # bind those rows back
-#   bind_rows(temp_subnat_pop_ratio) %>% 
-#   bind_rows(temp_subnat_pop_ratio_Mali) %>% 
-#   bind_rows(temp_subnat_pop_ratio_Algeria) %>% 
-#   arrange(GID_1)
-
-
-subnat_data_combined <- read_csv("results/births_subnat_combined_v2.csv")
+subnat_data_combined <- read_csv("../results/births_subnat_combined_v2.csv")
 names(subnat_data_combined) <- c("Country", "iso3","cntry_code","Subnat","GID_1","GID_nmbr","NumRate",paste0("ratio",1990:2019))
 
 # join tables together
@@ -466,12 +398,12 @@ temp <- subnat_gis_combined_pop %>%
   arrange(cntry_code,Subnat)
 #filter(NumRate=="N")
 
-write_csv(temp, "results/test_births_combined_pop_ratio_v2.csv")
+write_csv(temp, "../results/test_births_combined_pop_ratio_v2.csv")
 
 
 ### fill missing data ----
 
-subnat_gis_combined_pop <- read.csv( "results/test_births_combined_pop_ratio_v2.csv" )
+subnat_gis_combined_pop <- read.csv( "../results/test_births_combined_pop_ratio_v2.csv" )
 
 
 # GID1_missing <- 'BOL.6_1'
@@ -492,7 +424,7 @@ subnat_pop <-subnat_gis_combined_pop %>%
   select(Country,iso3,cntry_code,Subnat,GID_1,GID_nmbr,NumRate,paste0("pop",1990:2019))
 
 # read missing data
-listMissingData <- read_csv("data_in/missing_data_list_births.csv") %>% 
+listMissingData <- read_csv("../data_in/missing_data_list_births.csv") %>% 
   filter(mode != "population") %>% 
   as_tibble()
 
@@ -553,7 +485,7 @@ for (i in 1:nrow(listMissingData)) {
     # totals for combined area
     
     # if numeric, then we calculate the ratio for combined area
-    if(NumOrRate == "N") {
+    if(NumOrRate[1,1] == "N") {
       dataTotal <- colSums(as.matrix (dataSel_Num),na.rm=T)
       popTotal <- colSums(as.matrix (popSel[,2:ncol(popSel)]/1000),na.rm=T)
       dataRatioTotal <- dataTotal / popTotal # ratio for combined area
@@ -747,7 +679,7 @@ for (i in 1:nrow(listMissingData)) {
 subnat_gis_combined_ratio <-  subnat_gis_combined_ratio %>% 
   arrange(cntry_code,Subnat)
 
-write_csv(subnat_gis_combined_ratio, "results/births_ratio_filled.csv")
+write_csv(subnat_gis_combined_ratio, "../results/births_ratio_filled.csv")
 
 
 

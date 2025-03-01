@@ -6,8 +6,6 @@ library(magrittr)
 library(raster)
 library(terra)
 
-
-
 library(snow)
 library(foreach)
 library(openxlsx) #
@@ -15,8 +13,7 @@ library(readxl)
 library(tidyverse)
 library(dplyr) 
 
-library(doParallel)  #Foreach Parallel Adaptor 
-library(foreach)     #Provides foreach looping construct
+
 
 # set working directory the path that this script is located in
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
@@ -28,7 +25,7 @@ cntryID <- read_csv("../data_in/countries_codes_and_coordinates.csv") %>%
   dplyr::select(-cntry_code) %>% 
   rename(cntry_code = GADM_code) %>% # use GADM code instead of UN code
   select(cntry_code,iso2,iso3,Country)%>% 
-  distinct(GADM_code, iso3, cntry_code, .keep_all = T)
+  distinct(iso3, cntry_code, .keep_all = T)
 
 
 

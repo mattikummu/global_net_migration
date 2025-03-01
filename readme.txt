@@ -1,6 +1,6 @@
 **Code for the global net migration dataset and analyses**
 
-These codes were used to create the global net-migration dataset that is published in Niva et al. (2023). Please do cite this paper if using the codes. 
+These codes were used to create the global net-migration dataset, that is published in Niva et al. (2023), as well as analyses illustrated in the paper. Please do cite this paper if using the codes. 
 
 Niva et al. 2023. World's human migration patterns in 2000-2019 unveiled by high-resolution data. Nature Human Behaviour 7: 2023–2037. Doi: https://doi.org/10.1038/s41562-023-01689-4 
 
@@ -9,10 +9,10 @@ http://doi.org/10.5281/zenodo.7997134
 
 **Input data for the script**
 
-The input data for the codes are available at:
+The input data for the codes provided here are available at:
 http://doi.org/10.5281/zenodo.14946360
 
-To keep the folder structure, please extract all zip files in that Zenodo repository to the same folder where the code folders (see Code structure section) are. The folder should look like this:
+To keep the folder structure used in the scripts, please extract all zip files from the input data Zenodo repository (http://doi.org/10.5281/zenodo.14946360) to the same folder where the code folders (see Code structure section) are. The folder should look like this:
 
 
 ------ global_net_migration -folder ----------

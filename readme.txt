@@ -41,6 +41,9 @@ readme.txt
 
 **Reproducibility**
 
+Once the input data is loaded, the script should be run in order. I.e. Start with 0_install_required_packages.R, and then proceed to 1_preparing_data -folder, and run the scripts there in numerical order. As explained below, the codes under section 2 are not yet reproducible, but we provide output from these sections, so code is again reproducible from section 3 onwards (expect few exceptions, as detailed below). 
+
+
 Please note: all the scripts are not yet reproducible - we are working hard to get all the used input data into Zenodo. Apologies for this.
 
 Here are details:

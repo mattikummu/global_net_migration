@@ -17,7 +17,7 @@ To keep the folder structure used in the scripts, please extract all zip files f
 
 ------ global_net_migration -folder ----------
 
-0_run_all_scripts.R
+0_0_run_all_scripts.R
 0_1_install_required_packages.R
 
 1_preparing_data
@@ -37,7 +37,7 @@ functions
 global_net_migration.Rproj
 LICENSE
 readme.txt
-0_run_all_scripts.R
+
 --------------------------------------------
 
 
@@ -72,7 +72,7 @@ The code is divided into the following sections (folders):
 
 *Each script within a section is briefly explained below*
 
-'0_run_all_scripts.R'
+'0_0_run_all_scripts.R'
 - script that allows to run all the scripts in correct order
 
 `0_1_install_required_packages.R`

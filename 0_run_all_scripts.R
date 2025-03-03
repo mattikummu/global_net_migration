@@ -9,7 +9,7 @@
 # Set working directory to where this script is located
 setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
 
-source("0_install_required_packages.R")
+source("0_1_install_required_packages.R")
 # Installs all the required packages, in case those are not yet installed
 
 # 1. Data preparation

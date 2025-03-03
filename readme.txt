@@ -17,7 +17,8 @@ To keep the folder structure used in the scripts, please extract all zip files f
 
 ------ global_net_migration -folder ----------
 
-0_install_required_packages.R
+0_run_all_scripts.R
+0_1_install_required_packages.R
 
 1_preparing_data
 2_downscaling_BirthsDeaths
@@ -36,14 +37,17 @@ functions
 global_net_migration.Rproj
 LICENSE
 readme.txt
+0_run_all_scripts.R
 --------------------------------------------
 
 
 **Reproducibility**
 
-Once the input data is loaded, all the scripts can be run using run_all_scripts.R script. As explained below, the codes under section 2 are not yet reproducible, but we provide output from these sections, so code is again reproducible from section 3 onwards (expect few exceptions, as detailed below). 
+Once the input data is loaded, all the scripts can be run using 0_run_all_scripts.R script. 
 
-Alternatively, the script should be run separately in order. I.e. Start with 0_install_required_packages.R, and then proceed to 1_preparing_data -folder, and run the scripts there in numerical order. 
+As explained below, the codes under section 2 are not yet reproducible, but we provide output from these sections, so code is again reproducible from section 3 onwards (expect few exceptions, as detailed below). 
+
+Alternatively, the script should be run separately in order. I.e. Start with 0_1_install_required_packages.R, and then proceed to 1_preparing_data -folder, and run the scripts there in numerical order. 
 
 
 Please note: all the scripts are not yet reproducible - we are working hard to get all the used input data into Zenodo. Apologies for this.
@@ -68,8 +72,11 @@ The code is divided into the following sections (folders):
 
 *Each script within a section is briefly explained below*
 
-`0_install_required_packages.R`
-Installs all the required packages, in case those are not yet installed
+'0_run_all_scripts.R'
+- script that allows to run all the scripts in correct order
+
+`0_1_install_required_packages.R`
+- Installs all the required packages, in case those are not yet installed
 
 
 *1_preparing_data*
